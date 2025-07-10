@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import pytest
 import rich.console
 import rich.rule
+import rich.theme
 
 from _pytest import timing
 from _pytest.terminal import TerminalReporter
@@ -14,6 +17,7 @@ class ModernTerminalReporter(TerminalReporter):  # type: ignore[final-class]
         super().__init__(reporter.config)
         self.console = rich.console.Console()
 
+    @pytest.hookimpl(trylast=True)
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         self._session = session
         self._session_start = timing.Instant()
@@ -22,3 +26,10 @@ class ModernTerminalReporter(TerminalReporter):  # type: ignore[final-class]
         if self.no_header is False:
             header = Panel(generate_header_group(session), title="test session starts")
             self.console.print(header)
+
+    def summary_stats(self) -> None:
+        if self.verbosity < -1:
+            return
+        super().summary_stats()
+        self.console.print("────────────")
+        self.console.print("     [green]Summary[/green]")
