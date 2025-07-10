@@ -7,8 +7,11 @@ on:
 
 jobs:
   pypi-release:
-    name: Release
+    name: upload release to PyPI
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -21,9 +24,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Build project for distribution
-        run: uv build --wheel
-        
+        run: uv build
+
       - name: Publish to PyPI
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish
+        run: uv publish -v dist/*
