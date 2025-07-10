@@ -32,6 +32,6 @@ def pytest_configure(config: Config) -> None:
 
     if IS_MODERN_ENABLED and not getattr(config, "slaveinput", None):
         standard_reporter: Any = config.pluginmanager.getplugin("terminalreporter")
-        sugar_reporter = ModernTerminalReporter(standard_reporter)
+        modern_reporter = ModernTerminalReporter(standard_reporter)
         config.pluginmanager.unregister(standard_reporter)
-        config.pluginmanager.register(sugar_reporter, "terminalreporter")
+        config.pluginmanager.register(modern_reporter, "terminalreporter")
