@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 import rich.console
+import rich.live
 import rich.rule
 import rich.theme
 
@@ -27,6 +28,58 @@ class ModernTerminalReporter(terminal.TerminalReporter):  # type: ignore[final-c
             header = Panel(generate_header_group(session), title="test session starts")
             self.console.print(header)
 
+    def pytest_collection(self) -> None:
+        if self.isatty():
+            if self.config.option.verbose >= 0:
+                self.live = rich.live.Live(console=self.console)
+                self.live.start()
+                self.live.update("[bold]Collecting ...[/]")
+        elif self.config.option.verbose >= 1:
+            self.console.print("Collecting ... ", style="bold")
+
+    def report_collect(self, final: bool = False) -> None:
+        if self.config.option.verbose < 0:
+            return
+
+        if not final:
+            # Only write the "collecting" report every `REPORT_COLLECTING_RESOLUTION`.
+            if (
+                self._collect_report_last_write.elapsed().seconds
+                < terminal.REPORT_COLLECTING_RESOLUTION
+            ):
+                return
+            self._collect_report_last_write = timing.Instant()
+
+        errors = len(self.stats.get("error", []))
+        skipped = len(self.stats.get("skipped", []))
+        deselected = len(self.stats.get("deselected", []))
+        selected = self._numcollected - deselected
+        line = "[green]Collected[/] " if final else "[green]Collecting[/] "
+        line += (
+            f"[bold]{self._numcollected}[/]"
+            + " item"
+            + ("" if self._numcollected == 1 else "s")
+        )
+        extra_line = ""
+        if self._numcollected > selected:
+            extra_line += f", [bold]{selected}[/] [bold green]selected[/]"
+        if deselected:
+            extra_line += f", [bold]{deselected}[/] [bold bright_black]deselected[/]"
+        if skipped:
+            extra_line += f", [bold]{skipped}[/] [bold yellow]skipped[/]"
+        if errors:
+            extra_line += (
+                f", [bold]{errors}[/] [bold red]error[/]{'s' if errors != 1 else ''}"
+            )
+        if extra_line:
+            line = f"{line} ({extra_line.lstrip(', ')})"
+
+        if self.isatty():
+            self.live.update(line, refresh=True)
+            self.live.stop()
+        else:
+            self.console.print(line)
+
     def summary_stats(self) -> None:
         if self.verbosity < -1:
             return
@@ -36,8 +89,9 @@ class ModernTerminalReporter(terminal.TerminalReporter):  # type: ignore[final-c
             stat_type: len(self._get_reports_to_display(stat_type))
             for stat_type in self._known_types or []
         }
+        color_for_type = {**terminal._color_for_type, "deselected": "bright_black"}
         stats = ", ".join(
-            f"[bold]{count}[/] [bold {terminal._color_for_type.get(stat_type, terminal._color_for_type_default)}]{stat_type}[/]"
+            f"[bold]{count}[/] [bold {color_for_type.get(stat_type, terminal._color_for_type_default)}]{stat_type}[/]"
             for stat_type, count in stat_counts.items()
             if count > 0
         )
