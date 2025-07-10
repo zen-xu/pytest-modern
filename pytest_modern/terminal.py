@@ -8,6 +8,7 @@ import rich.theme
 
 from _pytest import terminal
 from _pytest import timing
+from _pytest.pathlib import bestrelpath
 from rich.panel import Panel
 
 from .header import generate_header_group
@@ -79,6 +80,13 @@ class ModernTerminalReporter(terminal.TerminalReporter):  # type: ignore[final-c
             self.live.stop()
         else:
             self.console.print(line)
+
+    def write_fspath_result(self, nodeid: str, res: str, **markup: bool) -> None:
+        fspath = self.config.rootpath / nodeid.split("::")[0]
+        if self.currentfspath is None or fspath != self.currentfspath:
+            self.currentfspath = fspath
+            relfspath = bestrelpath(self.startpath, fspath)
+            self.console.print(relfspath, style="magenta", end=" ")
 
     def summary_stats(self) -> None:
         if self.verbosity < -1:
