@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 import rich.console
 import rich.live
@@ -8,10 +10,15 @@ import rich.theme
 
 from _pytest import terminal
 from _pytest import timing
+from _pytest.config import Config
 from _pytest.pathlib import bestrelpath
 from rich.panel import Panel
 
 from .header import generate_header_group
+
+
+if TYPE_CHECKING:
+    from _pytest.reports import TestReport
 
 
 class ModernTerminalReporter(terminal.TerminalReporter):  # type: ignore[final-class]
@@ -107,6 +114,26 @@ class ModernTerminalReporter(terminal.TerminalReporter):  # type: ignore[final-c
         self.console.print(
             f"     [green]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
+
+    def pytest_runtest_logstart(
+        self, nodeid: str, location: tuple[str, int | None, str]
+    ) -> None:
+        fspath, lineno, domain = location
+        # Ensure that the path is printed before the
+        # 1st test of a module starts running.
+        if self.showlongtestinfo:
+            _line = self._locationline(nodeid, fspath, lineno, domain)
+        elif self.showfspath:
+            self.write_fspath_result(nodeid, "")
+            self.flush()
+
+    def pytest_runtest_logreport(self, report: TestReport) -> None:
+        if self.config.get_verbosity(Config.VERBOSITY_TEST_CASES) <= 0:
+            return super().pytest_runtest_logreport(report)
+
+    def _write_progress_information_filling_space(self) -> None:
+        # do not show the progress information
+        return
 
 
 def format_node_duration(seconds: float) -> str:
