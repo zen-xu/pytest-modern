@@ -4,11 +4,11 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 import pytest
-import rich.console
 import rich.live
 import rich.panel
 import rich.progress
 import rich.rule
+import rich.text
 import rich.theme
 
 from _pytest import terminal
@@ -42,8 +42,19 @@ class ModernTerminalReporter:
         self.categorized_reports: dict[str, list[pytest.TestReport]] = defaultdict(list)
         self.total_duration: float = 0
 
-        self.collect_progress: rich.progress.Progress | None = None
+        self.test_task_ids: dict[NodeId, rich.progress.TaskID] = {}
+        self.test_task_duration: dict[rich.progress.TaskID, float] = {}
         self.summary: rich.live.Live | None = None
+
+        self.collect_progress: rich.progress.Progress = rich.progress.Progress(
+            "[progress.description]{task.description}",
+        )
+        self.test_progress: rich.progress.Progress = rich.progress.Progress(
+            StatusColumn(),
+            TimeElapsedColumn(self.test_task_duration),
+            NodeIdColumn(),
+            ExtraInfoColumn(),
+        )
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
@@ -54,9 +65,6 @@ class ModernTerminalReporter:
         self.console.print(title)
 
     def pytest_collection(self) -> None:
-        self.collect_progress = rich.progress.Progress(
-            "[progress.description]{task.description}",
-        )
         self.collect_task = self.collect_progress.add_task("[cyan][bold]Collecting")
         self.collect_progress.start()
 
@@ -115,14 +123,19 @@ class ModernTerminalReporter:
             completed=True,
         )
         self.collect_progress.stop()
-        self.collect_progress = None
+
+    def pytest_runtest_logstart(
+        self, nodeid: NodeId, location: tuple[str, int | None, str]
+    ) -> None: ...
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         status = None
 
+        self.test_progress.start()
         if report.when == "setup":
             if report.outcome == "skipped":
                 self.categorized_reports["skipped"].append(report)
+                status = "skipped"
             else:
                 status = "running"
         elif report.when == "call":
@@ -130,14 +143,51 @@ class ModernTerminalReporter:
             if status == "skipped":
                 status = "xfailed"
             self.categorized_reports[status].append(report)
+            self.test_task_duration[self.test_task_ids[report.nodeid]] = report.duration
             self.total_duration += report.duration
         if status:
             self.status_per_item[report.nodeid] = status
-            self._update_task(report.nodeid)
+            self._update_test_task(status, report)
+
+    def _update_test_task(self, status: Status, report: pytest.TestReport):
+        nodeid = report.nodeid
+
+        if status == "running":
+            self.test_task_ids[nodeid] = self.test_progress.add_task(
+                "",
+                status="RUNNING",
+                color="green",
+                nodeid=nodeid,
+            )
+        elif status == "skipped":
+            self.test_task_ids[nodeid] = self.test_progress.add_task(
+                "",
+                status="SKIP",
+                color="yellow",
+                nodeid=nodeid,
+                extra_info=terminal._get_raw_skip_reason(report),
+            )
+        elif status in ["error", "failed"]:
+            self.test_progress.update(
+                self.test_task_ids[nodeid],
+                status="FAIL",
+                color="red",
+            )
+        elif status in ["passed", "xfailed"]:
+            self.test_progress.update(
+                self.test_task_ids[nodeid],
+                status="PASS",
+                color="green",
+                extra_info=""
+                if status == "passed"
+                else terminal._get_raw_skip_reason(report),
+            )
 
     def pytest_sessionfinish(
         self, session: pytest.Session, exitstatus: int | pytest.ExitCode
     ):
+        assert self.test_progress
+        self.test_progress.stop()
         if self.no_summary:
             return
 
@@ -158,34 +208,8 @@ class ModernTerminalReporter:
         )
 
         self.console.print(
-            f"     [green]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
+            f"   [green]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
-
-    def pytest_runtest_logstart(
-        self, nodeid: NodeId, location: tuple[str, int | None, str]
-    ) -> None:
-        self._update_task(nodeid)
-
-    def _update_task(self, nodeid: NodeId):
-        status = self.status_per_item[nodeid]
-
-        if status == "running":
-            self.task_live = rich.live.Live(console=rich.console.Console())
-            self.task_live.start()
-            self.task_live.update(f"[[bold green]RUNNING[/]] {nodeid}")
-            self.task_live.refresh()
-        elif status == "skipped":
-            self.console.print(f"[[bold green]SKIP[/]] {nodeid}")
-        elif status in ["error", "failed"]:
-            assert self.task_live
-            self.task_live.update(f"[[bold red]{status.upper()}[/]] {nodeid}")
-            self.task_live.refresh()
-            self.task_live.stop()
-        elif status == "success":
-            assert self.task_live
-            self.task_live.update(f"[[bold green]{status.upper()}[/]] {nodeid}")
-            self.task_live.refresh()
-            self.task_live.stop()
 
     @property
     def no_header(self) -> bool:
@@ -206,3 +230,36 @@ def format_node_duration(seconds: float) -> str:
 def plurals(items: Collection | int) -> str:
     count = items if isinstance(items, int) else len(items)
     return "s" if count > 1 else ""
+
+
+class StatusColumn(rich.progress.ProgressColumn):
+    def render(self, task: rich.progress.Task) -> rich.text.Text:
+        status = f"{task.fields['status']:>10s}"
+        return rich.text.Text.from_markup(f"[bold {task.fields['color']}]{status}[/]")
+
+
+class TimeElapsedColumn(rich.progress.ProgressColumn):
+    def __init__(self, test_task_duration: dict[rich.progress.TaskID, float]) -> None:
+        self.test_task_duration = test_task_duration
+        super().__init__(None)
+
+    def render(self, task: rich.progress.Task) -> rich.text.Text:
+        elapsed = self.test_task_duration.get(task.id, 0)
+        return rich.text.Text(f"[{format_node_duration(elapsed)}]")
+
+
+class NodeIdColumn(rich.progress.ProgressColumn):
+    def render(self, task: rich.progress.Task) -> rich.text.Text:
+        nodeid: str = task.fields["nodeid"]
+        fspath, *extra = nodeid.split("::")
+        func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
+        return rich.text.Text.from_markup(
+            f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
+        )
+
+
+class ExtraInfoColumn(rich.progress.ProgressColumn):
+    def render(self, task: rich.progress.Task) -> rich.text.Text:
+        if extra := task.fields.get("extra_info"):
+            return rich.text.Text(f"({extra})")
+        return rich.text.Text()

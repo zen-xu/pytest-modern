@@ -25,3 +25,9 @@ def test_xpassed():
     a = 1
     b = 2
     assert a + b == 2
+
+
+class TestIt:
+    def test_ok(self): ...
+    def test_fail(self):
+        assert 1 == 2
