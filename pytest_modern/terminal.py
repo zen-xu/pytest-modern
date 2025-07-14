@@ -198,7 +198,16 @@ class ModernTerminalReporter:
         session_duration = format_node_duration(self.total_duration)
         stat_counts = {
             stat_type: len(self.categorized_reports[stat_type])
-            for stat_type in terminal.KNOWN_TYPES
+            for stat_type in [
+                "passed",
+                "failed",
+                "skipped",
+                "deselected",
+                "xfailed",
+                "xpassed",
+                "warnings",
+                "error",
+            ]
         }
         color_for_type = {**terminal._color_for_type, "deselected": "bright_black"}
         stats = ", ".join(
