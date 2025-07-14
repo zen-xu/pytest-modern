@@ -113,9 +113,6 @@ class ModernTerminalReporter:
         self.test_live.start()
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
-        if report.when == "teardown":
-            return
-
         status = None
         if report.when == "setup":
             if report.outcome == "skipped":
@@ -129,6 +126,8 @@ class ModernTerminalReporter:
                 status = "xfailed"
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
+        elif report.when == "teardown":
+            return
 
         assert status
         self.status_per_item[report.nodeid] = status
