@@ -53,7 +53,7 @@ class ModernTerminalReporter:
             StatusColumn(),
             TimeElapsedColumn(self.test_task_duration),
             NodeIdColumn(),
-            ExtraInfoColumn(),
+            SkipReasonColumn(),
         )
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
@@ -165,7 +165,7 @@ class ModernTerminalReporter:
                 status="SKIP",
                 color="yellow",
                 nodeid=nodeid,
-                extra_info=terminal._get_raw_skip_reason(report),
+                skip_reason=terminal._get_raw_skip_reason(report),
             )
         elif status in ["error", "failed"]:
             self.test_progress.update(
@@ -173,14 +173,18 @@ class ModernTerminalReporter:
                 status="FAIL",
                 color="red",
             )
-        elif status in ["passed", "xfailed"]:
+        elif status == "passed":
             self.test_progress.update(
                 self.test_task_ids[nodeid],
                 status="PASS",
                 color="green",
-                extra_info=""
-                if status == "passed"
-                else terminal._get_raw_skip_reason(report),
+            )
+        elif status == "xfailed":
+            self.test_progress.update(
+                self.test_task_ids[nodeid],
+                status="XFAIL",
+                color="yellow",
+                skip_reason=terminal._get_raw_skip_reason(report),
             )
 
     def pytest_sessionfinish(
@@ -200,16 +204,19 @@ class ModernTerminalReporter:
             stat_type: len(self.categorized_reports[stat_type])
             for stat_type in [
                 "passed",
+                "xfailed",
+                "xpassed",
                 "failed",
                 "skipped",
                 "deselected",
-                "xfailed",
-                "xpassed",
                 "warnings",
                 "error",
             ]
         }
-        color_for_type = {**terminal._color_for_type, "deselected": "bright_black"}
+        color_for_type = {
+            **terminal._color_for_type,
+            "deselected": "bright_black",
+        }
         stats = ", ".join(
             f"[bold]{count}[/] [bold {color_for_type.get(stat_type, terminal._color_for_type_default)}]{stat_type}[/]"
             for stat_type, count in stat_counts.items()
@@ -276,8 +283,8 @@ def node_id_text(nodeid: str) -> rich.text.Text:
     )
 
 
-class ExtraInfoColumn(rich.progress.ProgressColumn):
+class SkipReasonColumn(rich.progress.ProgressColumn):
     def render(self, task: rich.progress.Task) -> rich.text.Text:
-        if extra := task.fields.get("extra_info"):
+        if extra := task.fields.get("skip_reason"):
             return rich.text.Text(f"({extra})")
         return rich.text.Text()

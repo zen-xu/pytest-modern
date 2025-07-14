@@ -21,10 +21,17 @@ def test_skipped():
 
 
 @pytest.mark.xfail(reason="expected to fail but passed")
-def test_xpassed():
+def test_xfail():
     a = 1
     b = 2
-    assert a + b == 2
+    assert a + b == 4
+
+
+@pytest.mark.xfail(reason="expected to fail but passed", strict=True)
+def test_xfail_strict():
+    a = 1
+    b = 2
+    assert a + b == 3
 
 
 class TestIt:
