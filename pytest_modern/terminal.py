@@ -127,60 +127,31 @@ class ModernTerminalReporter:
                 status = "xfailed"
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
-        if status:
-            self.status_per_item[report.nodeid] = status
-            self._update_test_task(status, report)
+        if not status:
+            return
 
-    def _update_test_task(self, status: Status, report: pytest.TestReport):
-        nodeid = report.nodeid
-
-        if status == "running":
-            self.test_live.update(
-                new_test_status(
-                    nodeid,
-                    "RUNNING",
-                    "green",
-                    duration=report.duration,
-                )
-            )
-        elif status == "skipped":
-            self.test_live.update(
-                new_test_status(
-                    nodeid,
-                    "SKIP",
-                    "yellow",
-                    duration=report.duration,
-                    skip_reason=terminal._get_raw_skip_reason(report),
-                )
-            )
-        elif status == "failed":
-            self.test_live.update(
-                new_test_status(
-                    nodeid,
-                    "FAIL",
-                    "red",
-                    duration=report.duration,
-                )
-            )
-        elif status == "passed":
-            self.test_live.update(
-                new_test_status(
-                    nodeid,
-                    "PASS",
-                    "green",
-                    duration=report.duration,
-                )
-            )
-        elif status == "xfailed":
-            self.test_live.update(
-                new_test_status(
-                    nodeid,
-                    "XFAIL",
-                    "yellow",
-                    duration=report.duration,
-                    skip_reason=terminal._get_raw_skip_reason(report),
-                )
-            )
+        self.status_per_item[report.nodeid] = status
+        status_param = {
+            "nodeid": report.nodeid,
+            "status": {
+                "running": "RUNNING",
+                "failed": "FAIL",
+                "passed": "PASS",
+                "xfailed": "XFAIL",
+                "skipped": "SKIP",
+            }[status],
+            "color": {
+                "running": "green",
+                "failed": "red",
+                "passed": "green",
+                "xfailed": "yellow",
+                "skipped": "yellow",
+            }[status],
+            "duration": report.duration,
+        }
+        if status in ["xfailed", "skipped"]:
+            status_param["skip_reason"] = terminal._get_raw_skip_reason(report)
+        self.test_live.update(new_test_status(**status_param))
 
     def pytest_runtest_logfinish(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
