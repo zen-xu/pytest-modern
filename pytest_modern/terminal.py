@@ -153,7 +153,7 @@ class ModernTerminalReporter:
                     skip_reason=terminal._get_raw_skip_reason(report),
                 )
             )
-        elif status in ["error", "failed"]:
+        elif status == "failed":
             self.test_live.update(
                 new_test_status(
                     nodeid,
