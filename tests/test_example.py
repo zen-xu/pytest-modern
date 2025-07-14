@@ -8,9 +8,7 @@ def test_passed():
 
 
 def test_failed():
-    a = 1
-    b = 2
-    assert a + b == 2
+    raise RuntimeError("something wrong")
 
 
 @pytest.mark.skip(reason="skipped")

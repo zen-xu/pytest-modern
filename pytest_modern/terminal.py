@@ -8,6 +8,7 @@ import rich.live
 import rich.panel
 import rich.progress
 import rich.rule
+import rich.syntax
 import rich.text
 import rich.theme
 
@@ -54,6 +55,11 @@ class ModernTerminalReporter:
             NodeIdColumn(),
             SkipReasonColumn(),
         )
+
+        class TW:
+            def _highlight(self, *args, **kwargs): ...
+
+        self._tw = TW()
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
@@ -227,8 +233,17 @@ class ModernTerminalReporter:
         )
         for failed_report in self.categorized_reports.get("failed", []):
             duration = format_node_duration(failed_report.duration)
+            try:
+                crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
+                syntax = rich.syntax.Syntax(
+                    crash_message, "python", theme="ansi_dark"
+                ).highlight(crash_message)
+                syntax.rstrip()
+            except Exception:
+                syntax = ""
             self.console.print(
                 f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
+                syntax,
             )
 
     @property
