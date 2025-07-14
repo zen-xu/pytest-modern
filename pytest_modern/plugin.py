@@ -13,21 +13,14 @@ from .terminal import ModernTerminalReporter
 IS_MODERN_ENABLED = False
 
 
-def pytest_addoption(parser: Parser):
-    group = parser.getgroup("modern", "pytest-modern", after="terminal reporting")
-    group.addoption(
-        "--modern",
-        action="store_true",
-        default=False,
-        help="Enable modern terminal report using pytest-modern",
-    )
+def pytest_addoption(parser: Parser): ...
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config: Config) -> None:
     global IS_MODERN_ENABLED
 
-    if sys.stdout.isatty():
+    if sys.stdout.isatty() and config.getoption("verbose") > 0:
         IS_MODERN_ENABLED = True
 
     if IS_MODERN_ENABLED and not getattr(config, "slaveinput", None):

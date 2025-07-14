@@ -43,19 +43,6 @@ class ModernTerminalReporter:
         self.categorized_reports: dict[str, list[pytest.TestReport]] = defaultdict(list)
         self.total_duration: float = 0
 
-        self.test_task_ids: dict[NodeId, rich.progress.TaskID] = {}
-        self.test_task_duration: dict[rich.progress.TaskID, float] = {}
-
-        self.collect_progress: rich.progress.Progress = rich.progress.Progress(
-            "{task.description}"
-        )
-        self.test_progress: rich.progress.Progress = rich.progress.Progress(
-            StatusColumn(),
-            TimeElapsedColumn(self.test_task_duration),
-            NodeIdColumn(),
-            SkipReasonColumn(),
-        )
-
         class TW:
             def _highlight(self, *args, **kwargs): ...
 
@@ -70,8 +57,8 @@ class ModernTerminalReporter:
         self.console.print(title)
 
     def pytest_collection(self) -> None:
-        self.collect_task = self.collect_progress.add_task("[cyan][bold]Collecting")
-        self.collect_progress.start()
+        self.collect_live = rich.live.Live(console=self.console)
+        self.collect_live.start()
 
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
         items = [x for x in report.result if isinstance(x, pytest.Item)]
@@ -86,12 +73,9 @@ class ModernTerminalReporter:
             self.items[item.nodeid] = item
         self.total_items_collected += len(items)
 
-        if self.collect_progress:
-            self.collect_progress.update(
-                self.collect_task,
-                description=f"[green bold]Collecting[/] [magenta]{report.nodeid}[/magenta] ([bold]{self.total_items_collected}[/] total item{plurals(self.total_items_collected)})",
-                refresh=True,
-            )
+        self.collect_live.update(
+            f"[green bold]Collecting[/] [magenta]{report.nodeid}[/magenta] ([bold]{self.total_items_collected}[/] total item{plurals(self.total_items_collected)})",
+        )
 
     def pytest_deselected(self, items: list[pytest.Item]) -> None:
         self.collect_stats["deselected"].extend(items)
@@ -101,9 +85,6 @@ class ModernTerminalReporter:
         self.collect_stats["selected"] = [
             item for item in self.items.values() if item not in unselected
         ]
-
-        if self.collect_progress is None:
-            return
 
         line = f"[green bold]Collected[/] [bold]{self.total_items_collected}[/] item{plurals(self.total_items_collected)}"
         extra_line = ""
@@ -122,21 +103,18 @@ class ModernTerminalReporter:
         if extra_line:
             line = f"{line} ({extra_line.lstrip(', ')})"
 
-        self.collect_progress.update(
-            self.collect_task,
-            description=line,
-            completed=True,
-        )
-        self.collect_progress.stop()
+        self.collect_live.update(line)
+        self.collect_live.stop()
 
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
-    ) -> None: ...
+    ) -> None:
+        self.test_live = rich.live.Live(console=self.console)
+        self.test_live.start()
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         status = None
 
-        self.test_progress.start()
         if report.when == "setup":
             if report.outcome == "skipped":
                 self.categorized_reports["skipped"].append(report)
@@ -148,7 +126,6 @@ class ModernTerminalReporter:
             if status == "skipped":
                 status = "xfailed"
             self.categorized_reports[status].append(report)
-            self.test_task_duration[self.test_task_ids[report.nodeid]] = report.duration
             self.total_duration += report.duration
         if status:
             self.status_per_item[report.nodeid] = status
@@ -158,45 +135,61 @@ class ModernTerminalReporter:
         nodeid = report.nodeid
 
         if status == "running":
-            self.test_task_ids[nodeid] = self.test_progress.add_task(
-                "",
-                status="RUNNING",
-                color="green",
-                nodeid=nodeid,
+            self.test_live.update(
+                new_test_status(
+                    nodeid,
+                    "RUNNING",
+                    "green",
+                    duration=report.duration,
+                )
             )
         elif status == "skipped":
-            self.test_task_ids[nodeid] = self.test_progress.add_task(
-                "",
-                status="SKIP",
-                color="yellow",
-                nodeid=nodeid,
-                skip_reason=terminal._get_raw_skip_reason(report),
+            self.test_live.update(
+                new_test_status(
+                    nodeid,
+                    "SKIP",
+                    "yellow",
+                    duration=report.duration,
+                    skip_reason=terminal._get_raw_skip_reason(report),
+                )
             )
         elif status in ["error", "failed"]:
-            self.test_progress.update(
-                self.test_task_ids[nodeid],
-                status="FAIL",
-                color="red",
+            self.test_live.update(
+                new_test_status(
+                    nodeid,
+                    "FAIL",
+                    "red",
+                    duration=report.duration,
+                )
             )
         elif status == "passed":
-            self.test_progress.update(
-                self.test_task_ids[nodeid],
-                status="PASS",
-                color="green",
+            self.test_live.update(
+                new_test_status(
+                    nodeid,
+                    "PASS",
+                    "green",
+                    duration=report.duration,
+                )
             )
         elif status == "xfailed":
-            self.test_progress.update(
-                self.test_task_ids[nodeid],
-                status="XFAIL",
-                color="yellow",
-                skip_reason=terminal._get_raw_skip_reason(report),
+            self.test_live.update(
+                new_test_status(
+                    nodeid,
+                    "XFAIL",
+                    "yellow",
+                    duration=report.duration,
+                    skip_reason=terminal._get_raw_skip_reason(report),
+                )
             )
+
+    def pytest_runtest_logfinish(
+        self, nodeid: NodeId, location: tuple[str, int | None, str]
+    ) -> None:
+        self.test_live.stop()
 
     def pytest_sessionfinish(
         self, session: pytest.Session, exitstatus: int | pytest.ExitCode
     ):
-        assert self.test_progress
-        self.test_progress.stop()
         if self.no_summary:
             return
 
@@ -267,38 +260,25 @@ def plurals(items: Collection | int) -> str:
     return "s" if count > 1 else ""
 
 
-class StatusColumn(rich.progress.ProgressColumn):
-    def render(self, task: rich.progress.Task) -> rich.text.Text:
-        status = f"{task.fields['status']:>10s}"
-        return rich.text.Text.from_markup(f"[bold {task.fields['color']}]{status}[/]")
+def new_test_status(
+    nodeid: str,
+    status: str,
+    color: str,
+    duration: float = 0,
+    skip_reason: str | None = None,
+) -> rich.text.Text:
+    elapsed = format_node_duration(duration)
 
-
-class TimeElapsedColumn(rich.progress.ProgressColumn):
-    def __init__(self, test_task_duration: dict[rich.progress.TaskID, float]) -> None:
-        self.test_task_duration = test_task_duration
-        super().__init__(None)
-
-    def render(self, task: rich.progress.Task) -> rich.text.Text:
-        elapsed = self.test_task_duration.get(task.id, 0)
-        return rich.text.Text(f"[{format_node_duration(elapsed)}]")
-
-
-class NodeIdColumn(rich.progress.ProgressColumn):
-    def render(self, task: rich.progress.Task) -> rich.text.Text:
-        nodeid: str = task.fields["nodeid"]
-        return node_id_text(nodeid)
-
-
-def node_id_text(nodeid: str) -> rich.text.Text:
     fspath, *extra = nodeid.split("::")
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
-    return rich.text.Text.from_markup(
-        f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
-    )
+    nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
+    text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
+    if skip_reason:
+        text += f" ({skip_reason})"
+    return rich.text.Text.from_markup(text)
 
 
-class SkipReasonColumn(rich.progress.ProgressColumn):
-    def render(self, task: rich.progress.Task) -> rich.text.Text:
-        if extra := task.fields.get("skip_reason"):
-            return rich.text.Text(f"({extra})")
-        return rich.text.Text()
+def node_id_text(nodeid: str) -> str:
+    fspath, *extra = nodeid.split("::")
+    func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
+    return f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
