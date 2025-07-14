@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from _pytest._code.code import ReprEntry
+
     Status = Literal["collected", "running", "passed", "failed", "skipped", "xfailed"]
     CollectCategory = Literal["selected", "deselected", "error", "skipped"]
     NodeId = str
@@ -153,6 +155,7 @@ class ModernTerminalReporter:
         if status in ["xfailed", "skipped"]:
             status_param["skip_reason"] = terminal._get_raw_skip_reason(report)
         self.test_live.update(new_test_status(**status_param))
+
         if status == "failed":
             self.test_live.stop()
             self.console.print("[red bold]stdout ───[/]")
@@ -166,14 +169,30 @@ class ModernTerminalReporter:
                 self.console.print(
                     rich.padding.Padding(report.capstderr, pad=(0, 0, 0, 2))
                 )
-            self.console.print(
-                rich.syntax.Syntax(
-                    report.longreprtext,
-                    "python",
-                    theme="ansi_dark",
-                    padding=(0, 0, 0, 2),
+            if isinstance(report.longrepr, str):
+                self.console.print(
+                    rich.padding.Padding(report.longrepr, pad=(0, 0, 0, 2))
                 )
-            )
+            else:
+                repr_entry: ReprEntry = report.longrepr.chain[0][0].reprentries[0]  # type: ignore
+                lines: list[str] = list(repr_entry.lines)
+                code = code_cache.read_code(repr_entry.reprfileloc.path)  # type: ignore
+                line_range = ()
+                lineno = repr_entry.reprfileloc.lineno  # type: ignore
+
+                self.console.print(
+                    rich.padding.Padding(
+                        f"[red]{repr_entry.reprfileloc.path}:{repr_entry.reprfileloc.lineno}[/]",  # type: ignore
+                        pad=(0, 0, 0, 2),
+                    )
+                )
+                self.console.print(
+                    rich.syntax.Syntax(
+                        "\n".join(lines),
+                        "python",
+                        theme="ansi_dark",
+                    )
+                )
 
     def pytest_runtest_logfinish(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
@@ -275,3 +294,19 @@ def node_id_text(nodeid: str) -> str:
     fspath, *extra = nodeid.split("::")
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     return f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
+
+
+class CodeCache:
+    def __init__(self):
+        self.cache: dict[str, str] = {}
+
+    def read_code(self, filename: str) -> str:
+        code = self.cache.get(filename)
+        if not code:
+            with open(filename, encoding="utf-8", errors="replace") as code_file:
+                code = code_file.read()
+            self.cache[filename] = code
+        return code
+
+
+code_cache = CodeCache()
