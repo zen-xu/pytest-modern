@@ -206,9 +206,9 @@ class ModernTerminalReporter:
             for stat_type, count in stat_counts.items()
             if count > 0
         )
-
+        summary_color = "green" if exitstatus == 0 else "red"
         self.console.print(
-            f"   [green]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
+            f"   [{summary_color}]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
 
     @property
