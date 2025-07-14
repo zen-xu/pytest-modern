@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 import rich.live
+import rich.padding
 import rich.panel
 import rich.progress
 import rich.rule
@@ -152,6 +153,27 @@ class ModernTerminalReporter:
         if status in ["xfailed", "skipped"]:
             status_param["skip_reason"] = terminal._get_raw_skip_reason(report)
         self.test_live.update(new_test_status(**status_param))
+        if status == "failed":
+            self.test_live.stop()
+            self.console.print("[red bold]stdout ───[/]")
+
+            if report.capstdout:
+                self.console.print(
+                    rich.padding.Padding(report.capstdout, pad=(0, 0, 0, 2))
+                )
+            self.console.print("[red bold]stderr ───[/]")
+            if report.capstderr:
+                self.console.print(
+                    rich.padding.Padding(report.capstderr, pad=(0, 0, 0, 2))
+                )
+            self.console.print(
+                rich.syntax.Syntax(
+                    report.longreprtext,
+                    "python",
+                    theme="ansi_dark",
+                    padding=(0, 0, 0, 2),
+                )
+            )
 
     def pytest_runtest_logfinish(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
@@ -167,7 +189,7 @@ class ModernTerminalReporter:
         self.print_summary(session, exitstatus)
 
     def print_summary(self, session: pytest.Session, exitstatus: int | pytest.ExitCode):
-        self.console.print("────────────")
+        self.console.print("──────────")
         session_duration = format_node_duration(self.total_duration)
         stat_counts = {
             stat_type: len(self.categorized_reports[stat_type])
