@@ -44,10 +44,9 @@ class ModernTerminalReporter:
 
         self.test_task_ids: dict[NodeId, rich.progress.TaskID] = {}
         self.test_task_duration: dict[rich.progress.TaskID, float] = {}
-        self.summary: rich.live.Live | None = None
 
         self.collect_progress: rich.progress.Progress = rich.progress.Progress(
-            "[progress.description]{task.description}",
+            "{task.description}"
         )
         self.test_progress: rich.progress.Progress = rich.progress.Progress(
             StatusColumn(),
