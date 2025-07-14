@@ -208,8 +208,13 @@ class ModernTerminalReporter:
         )
         summary_color = "green" if exitstatus == 0 else "red"
         self.console.print(
-            f"   [{summary_color}]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
+            f"   [{summary_color} bold]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
+        for failed_report in self.categorized_reports.get("failed", []):
+            duration = format_node_duration(failed_report.duration)
+            self.console.print(
+                f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
+            )
 
     @property
     def no_header(self) -> bool:
@@ -251,11 +256,15 @@ class TimeElapsedColumn(rich.progress.ProgressColumn):
 class NodeIdColumn(rich.progress.ProgressColumn):
     def render(self, task: rich.progress.Task) -> rich.text.Text:
         nodeid: str = task.fields["nodeid"]
-        fspath, *extra = nodeid.split("::")
-        func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
-        return rich.text.Text.from_markup(
-            f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
-        )
+        return node_id_text(nodeid)
+
+
+def node_id_text(nodeid: str) -> rich.text.Text:
+    fspath, *extra = nodeid.split("::")
+    func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
+    return rich.text.Text.from_markup(
+        f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
+    )
 
 
 class ExtraInfoColumn(rich.progress.ProgressColumn):
