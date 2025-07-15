@@ -8,20 +8,30 @@ from _pytest.config.argparsing import Parser
 from .terminal import ModernTerminalReporter
 
 
-IS_MODERN_ENABLED = False
-
-
-def pytest_addoption(parser: Parser): ...
+def pytest_addoption(parser: Parser):
+    group = parser.getgroup("modern", "pytest-modern", after="terminal reporting")
+    group.addoption(
+        "--modern-disable",
+        action="store_true",
+        default=False,
+        help="Disable pytest-modern",
+    )
+    group.addoption(
+        "--modern-no-color",
+        action="store_true",
+        default=False,
+        help="Disable color output",
+    )
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config: Config) -> None:
-    global IS_MODERN_ENABLED
-
-    IS_MODERN_ENABLED = True
-
-    if IS_MODERN_ENABLED and not getattr(config, "slaveinput", None):
+    if not config.getoption("modern_disable") and not getattr(
+        config, "slaveinput", None
+    ):
         standard_reporter: Any = config.pluginmanager.getplugin("terminalreporter")
-        modern_reporter = ModernTerminalReporter(standard_reporter.config)
+        modern_reporter = ModernTerminalReporter(
+            standard_reporter.config, color=not config.getoption("modern_no_color")
+        )
         config.pluginmanager.unregister(standard_reporter)
         config.pluginmanager.register(modern_reporter, "terminalreporter")
