@@ -66,7 +66,7 @@ class ModernTerminalReporter:
         self.console.print(title)
 
     def pytest_collection(self) -> None:
-        self.collect_live = Live(console=self.console)
+        self.collect_live = new_live(console=self.console)
         self.collect_live.start()
 
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
@@ -118,7 +118,7 @@ class ModernTerminalReporter:
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
     ) -> None:
-        self.test_live = Live(console=self.console)
+        self.test_live = new_live(console=self.console)
         self.test_live.start()
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
@@ -299,16 +299,22 @@ class CodeCache:
         return code
 
 
-class Live(rich.live.Live):
+def new_live(*args, **kwargs) -> rich.live.Live:
+    if sys.stdout.isatty():
+        return rich.live.Live(*args, **kwargs)
+    else:
+        return NonTTYLive(*args, **kwargs)
+
+
+class NonTTYLive(rich.live.Live):
+    def start(self, refresh: bool = False) -> None:
+        return
+
     def refresh(self) -> None:
-        if sys.stdout.isatty():
-            return
-        return super().refresh()
+        return
 
     def stop(self) -> None:
-        if sys.stdout.isatty():
-            super().refresh()
-        return super().stop()
+        self.console.print(self.renderable)
 
 
 code_cache = CodeCache()
