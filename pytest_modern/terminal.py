@@ -59,6 +59,10 @@ class ModernTerminalReporter:
         self.total_duration: float = 0
 
         class TW:
+            """
+            Fake terminal writer which is used by pytest.Config.get_terminal_writer
+            """
+
             def _highlight(self, *args, **kwargs): ...
 
         self._tw = TW()
