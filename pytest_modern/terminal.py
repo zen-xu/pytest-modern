@@ -35,7 +35,10 @@ class ModernTerminalReporter:
         self, config: pytest.Config, console: rich.console.Console | None = None
     ):
         self.config = config
-        self.console = console or rich.console.Console(highlight=False)
+        self.console = console or rich.console.Console(
+            highlight=False,
+            force_terminal=True,
+        )
 
         self.total_items_collected = 0
         self.total_items_completed = 0
