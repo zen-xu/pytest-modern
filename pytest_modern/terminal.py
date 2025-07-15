@@ -39,6 +39,7 @@ class ModernTerminalReporter:
         self.config = config
         self.console = console or rich.console.Console(
             highlight=False,
+            record=True,
             force_terminal=True,
         )
 
