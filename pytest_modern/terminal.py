@@ -14,16 +14,16 @@ import rich.text
 import rich.theme
 
 from _pytest import terminal
+from _pytest._code.code import ExceptionChainRepr
 
 from .header import generate_header_group
+from .traceback import ModernExceptionChainRepr
 
 
 if TYPE_CHECKING:
     from collections.abc import Collection
     from pathlib import Path
     from typing import Literal
-
-    from _pytest._code.code import ReprEntry
 
     Status = Literal["collected", "running", "passed", "failed", "skipped", "xfailed"]
     CollectCategory = Literal["selected", "deselected", "error", "skipped"]
@@ -174,25 +174,9 @@ class ModernTerminalReporter:
                     rich.padding.Padding(report.longrepr, pad=(0, 0, 0, 2))
                 )
             else:
-                repr_entry: ReprEntry = report.longrepr.chain[0][0].reprentries[0]  # type: ignore
-                lines: list[str] = list(repr_entry.lines)
-                code = code_cache.read_code(repr_entry.reprfileloc.path)  # type: ignore
-                line_range = ()
-                lineno = repr_entry.reprfileloc.lineno  # type: ignore
-
-                self.console.print(
-                    rich.padding.Padding(
-                        f"[red]{repr_entry.reprfileloc.path}:{repr_entry.reprfileloc.lineno}[/]",  # type: ignore
-                        pad=(0, 0, 0, 2),
-                    )
-                )
-                self.console.print(
-                    rich.syntax.Syntax(
-                        "\n".join(lines),
-                        "python",
-                        theme="ansi_dark",
-                    )
-                )
+                assert isinstance(report.longrepr, ExceptionChainRepr)
+                tb = ModernExceptionChainRepr(report.nodeid, report.longrepr)
+                self.console.print(tb)
 
     def pytest_runtest_logfinish(
         self, nodeid: NodeId, location: tuple[str, int | None, str]

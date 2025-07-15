@@ -35,4 +35,5 @@ def test_xfail_strict():
 class TestIt:
     def test_ok(self): ...
     def test_fail(self):
-        assert 1 == 2
+        a = 1
+        assert a == 2

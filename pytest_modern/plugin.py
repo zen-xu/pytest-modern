@@ -20,7 +20,7 @@ def pytest_addoption(parser: Parser): ...
 def pytest_configure(config: Config) -> None:
     global IS_MODERN_ENABLED
 
-    if sys.stdout.isatty() and config.getoption("verbose") > 0:
+    if sys.stdout.isatty():
         IS_MODERN_ENABLED = True
 
     if IS_MODERN_ENABLED and not getattr(config, "slaveinput", None):
