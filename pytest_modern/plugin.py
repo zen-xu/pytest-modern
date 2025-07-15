@@ -26,8 +26,10 @@ def pytest_addoption(parser: Parser):
 
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config: Config) -> None:
-    if not config.getoption("modern_disable") and not getattr(
-        config, "slaveinput", None
+    if (
+        not config.getoption("modern_disable")
+        and not getattr(config, "slaveinput", None)
+        and not config.getoption("help")
     ):
         standard_reporter: Any = config.pluginmanager.getplugin("terminalreporter")
         modern_reporter = ModernTerminalReporter(
