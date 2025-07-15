@@ -5,3 +5,8 @@
 ![GitHub License](https://img.shields.io/github/license/zen-xu/pytest-modern)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytest-modern)
 ![PyPI - Version](https://img.shields.io/pypi/v/pytest-modern)
+
+This plugin incorporates ideas from the implementation of [pytest-rich](https://github.com/nicoddemus/pytest-rich) and takes inspiration from the output style of [nextest](https://nexte.st).
+
+With the plugin currently outputs this:
+![image](assets/screenshot.jpg)
