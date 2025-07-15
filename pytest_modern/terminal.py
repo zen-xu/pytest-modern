@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -63,7 +65,7 @@ class ModernTerminalReporter:
         self.console.print(title)
 
     def pytest_collection(self) -> None:
-        self.collect_live = rich.live.Live(console=self.console, auto_refresh=False)
+        self.collect_live = Live(console=self.console)
         self.collect_live.start()
 
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
@@ -115,7 +117,7 @@ class ModernTerminalReporter:
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
     ) -> None:
-        self.test_live = rich.live.Live(console=self.console, auto_refresh=False)
+        self.test_live = Live(console=self.console)
         self.test_live.start()
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
@@ -294,6 +296,18 @@ class CodeCache:
                 code = code_file.read()
             self.cache[filename] = code
         return code
+
+
+class Live(rich.live.Live):
+    def refresh(self) -> None:
+        if sys.stdout.isatty():
+            return
+        return super().refresh()
+
+    def stop(self) -> None:
+        if sys.stdout.isatty():
+            super().refresh()
+        return super().stop()
 
 
 code_cache = CodeCache()
