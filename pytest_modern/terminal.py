@@ -39,8 +39,8 @@ class ModernTerminalReporter:
         self.config = config
         self.console = console or rich.console.Console(
             highlight=False,
-            record=True,
             force_terminal=True,
+            width=None if sys.stdout.isatty() else 120,
         )
 
         self.total_items_collected = 0
@@ -62,7 +62,9 @@ class ModernTerminalReporter:
         if self.no_header:
             title = rich.rule.Rule(title_msg, style="default")
         else:
-            title = rich.panel.Panel(generate_header_group(session), title=title_msg)
+            title = rich.panel.Panel(
+                generate_header_group(session), title=title_msg, width=120
+            )
         self.console.print(title)
 
     def pytest_collection(self) -> None:
