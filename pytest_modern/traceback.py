@@ -189,7 +189,7 @@ class ModernExceptionChainRepr:
                 ),
                 highlight_lines={lineno},
                 word_wrap=self.word_wrap,
-                code_width=88,
+                code_width=120,
                 indent_guides=self.indent_guides,
                 dedent=False,
             )

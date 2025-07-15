@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -35,7 +37,11 @@ class ModernTerminalReporter:
         self, config: pytest.Config, console: rich.console.Console | None = None
     ):
         self.config = config
-        self.console = console or rich.console.Console(highlight=False)
+        self.console = console or rich.console.Console(
+            highlight=False,
+            force_terminal=True,
+            width=None if sys.stdout.isatty() else 120,
+        )
 
         self.total_items_collected = 0
         self.total_items_completed = 0
@@ -56,11 +62,13 @@ class ModernTerminalReporter:
         if self.no_header:
             title = rich.rule.Rule(title_msg, style="default")
         else:
-            title = rich.panel.Panel(generate_header_group(session), title=title_msg)
+            title = rich.panel.Panel(
+                generate_header_group(session), title=title_msg, width=120
+            )
         self.console.print(title)
 
     def pytest_collection(self) -> None:
-        self.collect_live = rich.live.Live(console=self.console)
+        self.collect_live = new_live(console=self.console)
         self.collect_live.start()
 
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
@@ -112,7 +120,7 @@ class ModernTerminalReporter:
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
     ) -> None:
-        self.test_live = rich.live.Live(console=self.console)
+        self.test_live = new_live(console=self.console)
         self.test_live.start()
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
@@ -291,6 +299,24 @@ class CodeCache:
                 code = code_file.read()
             self.cache[filename] = code
         return code
+
+
+def new_live(*args, **kwargs) -> rich.live.Live:
+    if sys.stdout.isatty():
+        return rich.live.Live(*args, **kwargs)
+    else:
+        return NonTTYLive(*args, **kwargs)
+
+
+class NonTTYLive(rich.live.Live):
+    def start(self, refresh: bool = False) -> None:
+        return
+
+    def refresh(self) -> None:
+        return
+
+    def stop(self) -> None:
+        self.console.print(self.renderable)
 
 
 code_cache = CodeCache()
