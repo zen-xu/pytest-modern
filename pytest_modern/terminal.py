@@ -35,13 +35,17 @@ if TYPE_CHECKING:
 
 class ModernTerminalReporter:
     def __init__(
-        self, config: pytest.Config, console: rich.console.Console | None = None
+        self,
+        config: pytest.Config,
+        color: bool,
+        console: rich.console.Console | None = None,
     ):
         self.config = config
         self.console = console or rich.console.Console(
             highlight=False,
             force_terminal=True,
             width=None if sys.stdout.isatty() else 200,
+            color_system="auto" if color else None,
         )
         self.console.file = trim_io_space(self.console.file)
 
