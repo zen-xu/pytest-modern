@@ -25,6 +25,7 @@ from .traceback import ModernExceptionChainRepr
 if TYPE_CHECKING:
     from collections.abc import Collection
     from pathlib import Path
+    from typing import IO
     from typing import Literal
 
     Status = Literal["collected", "running", "passed", "failed", "skipped", "xfailed"]
@@ -40,8 +41,9 @@ class ModernTerminalReporter:
         self.console = console or rich.console.Console(
             highlight=False,
             force_terminal=True,
-            width=None if sys.stdout.isatty() else 120,
+            width=None if sys.stdout.isatty() else 200,
         )
+        self.console.file = trim_io_space(self.console.file)
 
         self.total_items_collected = 0
         self.total_items_completed = 0
@@ -320,3 +322,45 @@ class NonTTYLive(rich.live.Live):
 
 
 code_cache = CodeCache()
+
+
+def trim_io_space(f: IO[str]) -> IO[str]:
+    class Wrapper:
+        def __init__(self, f: IO[str]):
+            self.f = f
+            self.buffer = ""
+
+        def write(self, data):
+            # Accumulate data in buffer
+            self.buffer += data
+
+        def flush(self):
+            # Split buffer into lines, strip trailing spaces, and write
+            if self.buffer:
+                lines = self.buffer.splitlines(keepends=True)
+                for line in lines:
+                    # Remove trailing whitespace before line ending
+                    if line.endswith(("\n", "\r")):
+                        # Find the line ending
+                        line_ending = ""
+                        if line.endswith("\r\n"):
+                            line_ending = "\r\n"
+                            content = line[:-2]
+                        elif line.endswith("\n"):
+                            line_ending = "\n"
+                            content = line[:-1]
+                        elif line.endswith("\r"):
+                            line_ending = "\r"
+                            content = line[:-1]
+                        else:
+                            content = line
+                        self.f.write(content.rstrip() + line_ending)  # type: ignore
+                    else:
+                        self.f.write(line.rstrip())  # type: ignore
+                self.buffer = ""
+            self.f.flush()
+
+        def __getattr__(self, name):
+            return getattr(self.f, name)
+
+    return Wrapper(f)  # type: ignore
