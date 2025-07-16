@@ -223,7 +223,7 @@ class ModernTerminalReporter:
         }
         if status in ["xfailed", "skipped"]:
             status_param["reason"] = terminal._get_raw_skip_reason(report)
-        self.test_live.update(new_test_status(**status_param))
+        self.test_live.update(new_test_status(report, **status_param))
         self.test_live.refresh()
 
         if status in ["failed", "timeout"]:
@@ -295,7 +295,6 @@ class ModernTerminalReporter:
 
         for failed_status in ["failed", "timeout"]:
             for failed_report in self.categorized_reports.get(failed_status, []):
-                duration = format_node_duration(failed_report.duration)
                 try:
                     crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
                     crash_message = rich.syntax.Syntax(
@@ -304,11 +303,20 @@ class ModernTerminalReporter:
                     crash_message.rstrip()
                 except Exception:
                     crash_message = ""
-                status_text = failed_status.rstrip("ed").upper()
-                self.console.print(
-                    f"[red bold]{f'{status_text}':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
-                    crash_message,
-                )
+                if failed_status == "failed":
+                    duration = format_node_duration(failed_report.duration)
+                    self.console.print(
+                        f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
+                        crash_message,
+                    )
+                elif failed_status == "timeout":
+                    timeout = terminal.format_node_duration(
+                        failed_report.keywords["timeout"]
+                    )
+                    self.console.print(
+                        f"[red bold]{'TIMEOUT':>10s}[/] [>{timeout:>9}] [red bold]{failed_report.nodeid}[/]"
+                    )
+
         for warning_report in self.categorized_reports.get("warning", []):
             assert warning_report.nodeid
             test_report = self.test_reports[warning_report.nodeid]
@@ -344,18 +352,22 @@ def plurals(items: Collection | int) -> str:
 
 
 def new_test_status(
+    report: pytest.TestReport,
     nodeid: str,
     status: str,
     color: str,
     duration: float = 0,
     reason: str | None = None,
 ) -> rich.text.Text:
-    elapsed = format_node_duration(duration)
-
     fspath, *extra = nodeid.split("::")
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
-    text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
+    if status == "TIMEOUT":
+        timeout = terminal.format_node_duration(report.keywords["timeout"])
+        text = f"[bold {color}]{status:>10s}[/] [>{timeout:>9}] {nodeid}"
+    else:
+        elapsed = format_node_duration(duration)
+        text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
     if reason:
         text += f" ({reason})"
     return rich.text.Text.from_markup(text)
