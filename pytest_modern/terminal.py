@@ -37,7 +37,14 @@ if TYPE_CHECKING:
     from typing_extensions import TypedDict
 
     Status = Literal[
-        "collected", "running", "passed", "failed", "skipped", "xfailed", "warning"
+        "collected",
+        "running",
+        "passed",
+        "failed",
+        "skipped",
+        "xfailed",
+        "warning",
+        "timeout",
     ]
     CollectCategory = Literal["selected", "deselected", "error", "skipped"]
     NodeId = str
@@ -45,6 +52,7 @@ if TYPE_CHECKING:
     class CategorizedReports(TypedDict):
         running: list[pytest.TestReport]
         failed: list[pytest.TestReport]
+        timeout: list[pytest.TestReport]
         passed: list[pytest.TestReport]
         xfailed: list[pytest.TestReport]
         skipped: list[pytest.TestReport]
@@ -182,6 +190,10 @@ class ModernTerminalReporter:
             status = report.outcome
             if status == "skipped":
                 status = "xfailed"
+            elif status == "failed" and report.keywords.get("timeout"):
+                crash_message: str = report.longrepr.reprcrash.message  # type: ignore
+                if crash_message.startswith("Failed: Timeout"):
+                    status = "timeout"
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
         elif report.when == "teardown":
@@ -197,10 +209,12 @@ class ModernTerminalReporter:
                 "passed": "PASS",
                 "xfailed": "XFAIL",
                 "skipped": "SKIP",
+                "timeout": "TIMEOUT",
             }[status],
             "color": {
                 "running": "green",
                 "failed": "red",
+                "timeout": "red",
                 "passed": "green",
                 "xfailed": "yellow",
                 "skipped": "yellow",
@@ -212,7 +226,7 @@ class ModernTerminalReporter:
         self.test_live.update(new_test_status(**status_param))
         self.test_live.refresh()
 
-        if status == "failed":
+        if status in ["failed", "timeout"]:
             self.test_live.stop()
             self.console.print("[red bold]stdout ───[/]")
 
@@ -261,11 +275,13 @@ class ModernTerminalReporter:
                 "deselected",
                 "warning",
                 "error",
+                "timeout",
             ]
         }
         color_for_type = {
             **terminal._color_for_type,
             "deselected": "bright_black",
+            "timeout": "red",
         }
         stats = ", ".join(
             f"[bold]{count}[/] [bold {color_for_type.get(stat_type, terminal._color_for_type_default)}]{stat_type}[/]"
@@ -276,20 +292,23 @@ class ModernTerminalReporter:
         self.console.print(
             f"   [{summary_color} bold]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
-        for failed_report in self.categorized_reports.get("failed", []):
-            duration = format_node_duration(failed_report.duration)
-            try:
-                crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
-                crash_message = rich.syntax.Syntax(
-                    crash_message, "python", theme="ansi_dark"
-                ).highlight(crash_message)
-                crash_message.rstrip()
-            except Exception:
-                crash_message = ""
-            self.console.print(
-                f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
-                crash_message,
-            )
+
+        for failed_status in ["failed", "timeout"]:
+            for failed_report in self.categorized_reports.get(failed_status, []):
+                duration = format_node_duration(failed_report.duration)
+                try:
+                    crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
+                    crash_message = rich.syntax.Syntax(
+                        crash_message, "python", theme="ansi_dark"
+                    ).highlight(crash_message)
+                    crash_message.rstrip()
+                except Exception:
+                    crash_message = ""
+                status_text = failed_status.rstrip("ed").upper()
+                self.console.print(
+                    f"[red bold]{f'{status_text}':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
+                    crash_message,
+                )
         for warning_report in self.categorized_reports.get("warning", []):
             assert warning_report.nodeid
             test_report = self.test_reports[warning_report.nodeid]
