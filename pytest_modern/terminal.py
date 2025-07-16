@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 
 from collections import defaultdict
@@ -18,6 +19,7 @@ import rich.theme
 
 from _pytest import terminal
 from _pytest._code.code import ExceptionChainRepr
+from _pytest._io import TerminalWriter
 
 from .header import generate_header_group
 from .traceback import ModernExceptionChainRepr
@@ -81,14 +83,10 @@ class ModernTerminalReporter:
         self.categorized_reports: CategorizedReports = defaultdict(list)  # type: ignore
         self.total_duration: float = 0
 
-        class TW:
-            """
-            Fake terminal writer which is used by pytest.Config.get_terminal_writer
-            """
-
-            def _highlight(self, *args, **kwargs): ...
-
-        self._tw = TW()
+        # _tw is used by pytest.Config.get_terminal_writer
+        # We need to set it to a terminal writer that does nothing
+        devnull_path = "nul" if os.name == "nt" else "/dev/null"
+        self._tw = TerminalWriter(file=open(devnull_path, "w"))  # noqa: SIM115
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
