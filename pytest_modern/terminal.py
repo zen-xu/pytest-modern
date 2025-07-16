@@ -414,13 +414,17 @@ def new_live(*args, **kwargs) -> rich.live.Live:
 
 class NonTTYLive(rich.live.Live):
     def start(self, refresh: bool = False) -> None:
+        self.printed = False
         return
 
     def refresh(self) -> None:
         return
 
     def stop(self) -> None:
-        self.console.print(self.renderable)
+        if not self.printed:
+            # make sure only printed once
+            self.console.print(self.renderable)
+            self.printed = True
 
 
 class Live(rich.live.Live):
