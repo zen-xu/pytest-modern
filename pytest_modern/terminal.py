@@ -5,6 +5,7 @@ import sys
 import threading
 
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -96,6 +97,10 @@ class ModernTerminalReporter:
         # We need to set it to a terminal writer that does nothing
         devnull_path = "nul" if os.name == "nt" else "/dev/null"
         self._tw = TerminalWriter(file=open(devnull_path, "w"))  # noqa: SIM115
+
+        self.default_timeout: float = float(
+            self.config.getoption("timeout") or self.config.getini("timeout") or 0
+        )
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
@@ -190,10 +195,11 @@ class ModernTerminalReporter:
             status = report.outcome
             if status == "skipped":
                 status = "xfailed"
-            elif status == "failed" and report.keywords.get("timeout"):
-                crash_message: str = report.longrepr.reprcrash.message  # type: ignore
-                if crash_message.startswith("Failed: Timeout"):
-                    status = "timeout"
+            elif status == "failed":
+                with suppress(Exception):
+                    crash_message: str = report.longrepr.reprcrash.message  # type: ignore
+                    if crash_message.startswith("Failed: Timeout"):
+                        status = "timeout"
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
         elif report.when == "teardown":
@@ -223,7 +229,11 @@ class ModernTerminalReporter:
         }
         if status in ["xfailed", "skipped"]:
             status_param["reason"] = terminal._get_raw_skip_reason(report)
-        self.test_live.update(new_test_status(report, **status_param))
+        self.test_live.update(
+            new_test_status(
+                report, default_timeout=self.default_timeout, **status_param
+            )
+        )
         self.test_live.refresh()
 
         if status in ["failed", "timeout"]:
@@ -311,7 +321,7 @@ class ModernTerminalReporter:
                     )
                 elif failed_status == "timeout":
                     timeout = terminal.format_node_duration(
-                        failed_report.keywords["timeout"]
+                        failed_report.keywords.get("timeout", self.default_timeout)
                     )
                     self.console.print(
                         f"[red bold]{'TIMEOUT':>10s}[/] [>{timeout:>9}] [red bold]{failed_report.nodeid}[/]"
@@ -357,13 +367,16 @@ def new_test_status(
     status: str,
     color: str,
     duration: float = 0,
+    default_timeout: float = 0,
     reason: str | None = None,
 ) -> rich.text.Text:
     fspath, *extra = nodeid.split("::")
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
     if status == "TIMEOUT":
-        timeout = terminal.format_node_duration(report.keywords["timeout"])
+        timeout = terminal.format_node_duration(
+            report.keywords.get("timeout", default_timeout)
+        )
         text = f"[bold {color}]{status:>10s}[/] [>{timeout:>9}] {nodeid}"
     else:
         elapsed = format_node_duration(duration)

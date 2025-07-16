@@ -74,3 +74,6 @@ force-single-line = true
 known-first-party = ["pytest_modern"]
 lines-after-imports = 2
 lines-between-types = 1
+
+[tool.pytest.ini_options]
+timeout = 2

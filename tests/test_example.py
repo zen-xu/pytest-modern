@@ -45,6 +45,12 @@ def test_timeout():
     time.sleep(3)
 
 
+def test_timeout_from_config():
+    import time
+
+    time.sleep(3)
+
+
 class TestGroup:
     def test_ok(self): ...
     def test_fail(self):
