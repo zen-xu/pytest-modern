@@ -222,7 +222,7 @@ class ModernTerminalReporter:
             "duration": report.duration,
         }
         if status in ["xfailed", "skipped"]:
-            status_param["skip_reason"] = terminal._get_raw_skip_reason(report)
+            status_param["reason"] = terminal._get_raw_skip_reason(report)
         self.test_live.update(new_test_status(**status_param))
         self.test_live.refresh()
 
@@ -348,7 +348,7 @@ def new_test_status(
     status: str,
     color: str,
     duration: float = 0,
-    skip_reason: str | None = None,
+    reason: str | None = None,
 ) -> rich.text.Text:
     elapsed = format_node_duration(duration)
 
@@ -356,8 +356,8 @@ def new_test_status(
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
     text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
-    if skip_reason:
-        text += f" ({skip_reason})"
+    if reason:
+        text += f" ({reason})"
     return rich.text.Text.from_markup(text)
 
 
