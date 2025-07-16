@@ -120,6 +120,7 @@ class ModernTerminalReporter:
         self.collect_live.update(
             f"[green bold]Collecting[/] [magenta]{report.nodeid}[/magenta] ([bold]{self.total_items_collected}[/] total item{plurals(self.total_items_collected)})",
         )
+        self.collect_live.refresh()
 
     def pytest_deselected(self, items: list[pytest.Item]) -> None:
         self.collect_stats["deselected"].extend(items)
@@ -210,6 +211,7 @@ class ModernTerminalReporter:
         if status in ["xfailed", "skipped"]:
             status_param["skip_reason"] = terminal._get_raw_skip_reason(report)
         self.test_live.update(new_test_status(**status_param))
+        self.test_live.refresh()
 
         if status == "failed":
             self.test_live.stop()
