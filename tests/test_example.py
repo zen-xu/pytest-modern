@@ -1,3 +1,5 @@
+import warnings
+
 import pytest
 
 
@@ -32,7 +34,11 @@ def test_xfail_strict():
     assert a + b == 3
 
 
-class TestIt:
+def test_warning():
+    warnings.warn("this is a warning", UserWarning, stacklevel=1)
+
+
+class TestGroup:
     def test_ok(self): ...
     def test_fail(self):
         a = 1

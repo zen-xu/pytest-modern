@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,14 +24,35 @@ from .traceback import ModernExceptionChainRepr
 
 
 if TYPE_CHECKING:
+    import warnings
+
     from collections.abc import Collection
     from pathlib import Path
     from typing import IO
     from typing import Literal
 
-    Status = Literal["collected", "running", "passed", "failed", "skipped", "xfailed"]
+    from typing_extensions import TypedDict
+
+    Status = Literal[
+        "collected", "running", "passed", "failed", "skipped", "xfailed", "warning"
+    ]
     CollectCategory = Literal["selected", "deselected", "error", "skipped"]
     NodeId = str
+
+    class CategorizedReports(TypedDict):
+        running: list[pytest.TestReport]
+        failed: list[pytest.TestReport]
+        passed: list[pytest.TestReport]
+        xfailed: list[pytest.TestReport]
+        skipped: list[pytest.TestReport]
+        warning: list[WarningReport]
+
+
+@dataclass
+class WarningReport:
+    message: warnings.WarningMessage
+    fslocation: tuple[str, int]
+    nodeid: str
 
 
 class ModernTerminalReporter:
@@ -55,7 +77,8 @@ class ModernTerminalReporter:
         self.items_per_file: dict[Path, list[pytest.Item]] = {}
         self.status_per_item: dict[NodeId, Status] = {}
         self.items: dict[NodeId, pytest.Item] = {}
-        self.categorized_reports: dict[str, list[pytest.TestReport]] = defaultdict(list)
+        self.test_reports: dict[NodeId, pytest.TestReport] = {}
+        self.categorized_reports: CategorizedReports = defaultdict(list)  # type: ignore
         self.total_duration: float = 0
 
         class TW:
@@ -133,8 +156,22 @@ class ModernTerminalReporter:
         self.test_live = new_live(console=self.console)
         self.test_live.start()
 
+    def pytest_warning_recorded(
+        self, warning_message: warnings.WarningMessage, nodeid: str
+    ) -> None:
+        if self.config.getoption("disable_warnings"):
+            return
+
+        fslocation = warning_message.filename, warning_message.lineno
+        warning_report = WarningReport(
+            fslocation=fslocation, message=warning_message, nodeid=nodeid
+        )
+        self.categorized_reports["warning"].append(warning_report)
+
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         status = None
+        self.test_reports[report.nodeid] = report
+
         if report.when == "setup":
             if report.outcome == "skipped":
                 self.categorized_reports["skipped"].append(report)
@@ -221,7 +258,7 @@ class ModernTerminalReporter:
                 "failed",
                 "skipped",
                 "deselected",
-                "warnings",
+                "warning",
                 "error",
             ]
         }
@@ -242,15 +279,27 @@ class ModernTerminalReporter:
             duration = format_node_duration(failed_report.duration)
             try:
                 crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
-                syntax = rich.syntax.Syntax(
+                crash_message = rich.syntax.Syntax(
                     crash_message, "python", theme="ansi_dark"
                 ).highlight(crash_message)
-                syntax.rstrip()
+                crash_message.rstrip()
             except Exception:
-                syntax = ""
+                crash_message = ""
             self.console.print(
                 f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
-                syntax,
+                crash_message,
+            )
+        for warning_report in self.categorized_reports.get("warning", []):
+            assert warning_report.nodeid
+            test_report = self.test_reports[warning_report.nodeid]
+            duration = format_node_duration(test_report.duration)
+            warn_message = rich.syntax.Syntax(
+                repr(warning_report.message.message), "python", theme="ansi_dark"
+            ).highlight(repr(warning_report.message.message))
+            warn_message.rstrip()
+            self.console.print(
+                f"[yellow bold]{'WARN':>10s}[/] [{duration}] [yellow bold]{warning_report.nodeid}[/]",
+                warn_message,
             )
 
     @property
