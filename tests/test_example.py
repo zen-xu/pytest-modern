@@ -38,6 +38,13 @@ def test_warning():
     warnings.warn("this is a warning", UserWarning, stacklevel=1)
 
 
+@pytest.mark.timeout(1)
+def test_timeout():
+    import time
+
+    time.sleep(3)
+
+
 class TestGroup:
     def test_ok(self): ...
     def test_fail(self):

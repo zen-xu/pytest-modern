@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 from collections import defaultdict
 from dataclasses import dataclass
@@ -362,7 +363,7 @@ class CodeCache:
 
 def new_live(*args, **kwargs) -> rich.live.Live:
     if sys.stdout.isatty():
-        return rich.live.Live(*args, **kwargs)
+        return Live(*args, **kwargs)
     else:
         return NonTTYLive(*args, **kwargs)
 
@@ -376,6 +377,14 @@ class NonTTYLive(rich.live.Live):
 
     def stop(self) -> None:
         self.console.print(self.renderable)
+
+
+class Live(rich.live.Live):
+    def refresh(self) -> None:
+        # disable refresh in non-main thread, for example in pytest-timeout
+        if threading.current_thread() is not threading.main_thread():
+            return
+        return super().refresh()
 
 
 code_cache = CodeCache()
