@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -36,7 +38,14 @@ if TYPE_CHECKING:
     from typing_extensions import TypedDict
 
     Status = Literal[
-        "collected", "running", "passed", "failed", "skipped", "xfailed", "warning"
+        "collected",
+        "running",
+        "passed",
+        "failed",
+        "skipped",
+        "xfailed",
+        "warning",
+        "timeout",
     ]
     CollectCategory = Literal["selected", "deselected", "error", "skipped"]
     NodeId = str
@@ -44,6 +53,7 @@ if TYPE_CHECKING:
     class CategorizedReports(TypedDict):
         running: list[pytest.TestReport]
         failed: list[pytest.TestReport]
+        timeout: list[pytest.TestReport]
         passed: list[pytest.TestReport]
         xfailed: list[pytest.TestReport]
         skipped: list[pytest.TestReport]
@@ -87,6 +97,10 @@ class ModernTerminalReporter:
         # We need to set it to a terminal writer that does nothing
         devnull_path = "nul" if os.name == "nt" else "/dev/null"
         self._tw = TerminalWriter(file=open(devnull_path, "w"))  # noqa: SIM115
+
+        self.default_timeout: float = float(
+            self.config.getoption("timeout") or self.config.getini("timeout") or 0
+        )
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
@@ -181,6 +195,11 @@ class ModernTerminalReporter:
             status = report.outcome
             if status == "skipped":
                 status = "xfailed"
+            elif status == "failed":
+                with suppress(Exception):
+                    crash_message: str = report.longrepr.reprcrash.message  # type: ignore
+                    if crash_message.startswith("Failed: Timeout"):
+                        status = "timeout"
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
         elif report.when == "teardown":
@@ -196,10 +215,12 @@ class ModernTerminalReporter:
                 "passed": "PASS",
                 "xfailed": "XFAIL",
                 "skipped": "SKIP",
+                "timeout": "TIMEOUT",
             }[status],
             "color": {
                 "running": "green",
                 "failed": "red",
+                "timeout": "red",
                 "passed": "green",
                 "xfailed": "yellow",
                 "skipped": "yellow",
@@ -207,11 +228,15 @@ class ModernTerminalReporter:
             "duration": report.duration,
         }
         if status in ["xfailed", "skipped"]:
-            status_param["skip_reason"] = terminal._get_raw_skip_reason(report)
-        self.test_live.update(new_test_status(**status_param))
+            status_param["reason"] = terminal._get_raw_skip_reason(report)
+        self.test_live.update(
+            new_test_status(
+                report, default_timeout=self.default_timeout, **status_param
+            )
+        )
         self.test_live.refresh()
 
-        if status == "failed":
+        if status in ["failed", "timeout"]:
             self.test_live.stop()
             self.console.print("[red bold]stdout ───[/]")
 
@@ -260,11 +285,13 @@ class ModernTerminalReporter:
                 "deselected",
                 "warning",
                 "error",
+                "timeout",
             ]
         }
         color_for_type = {
             **terminal._color_for_type,
             "deselected": "bright_black",
+            "timeout": "red",
         }
         stats = ", ".join(
             f"[bold]{count}[/] [bold {color_for_type.get(stat_type, terminal._color_for_type_default)}]{stat_type}[/]"
@@ -275,20 +302,31 @@ class ModernTerminalReporter:
         self.console.print(
             f"   [{summary_color} bold]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
-        for failed_report in self.categorized_reports.get("failed", []):
-            duration = format_node_duration(failed_report.duration)
-            try:
-                crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
-                crash_message = rich.syntax.Syntax(
-                    crash_message, "python", theme="ansi_dark"
-                ).highlight(crash_message)
-                crash_message.rstrip()
-            except Exception:
-                crash_message = ""
-            self.console.print(
-                f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
-                crash_message,
-            )
+
+        for failed_status in ["failed", "timeout"]:
+            for failed_report in self.categorized_reports.get(failed_status, []):
+                try:
+                    crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
+                    crash_message = rich.syntax.Syntax(
+                        crash_message, "python", theme="ansi_dark"
+                    ).highlight(crash_message)
+                    crash_message.rstrip()
+                except Exception:
+                    crash_message = ""
+                if failed_status == "failed":
+                    duration = format_node_duration(failed_report.duration)
+                    self.console.print(
+                        f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
+                        crash_message,
+                    )
+                elif failed_status == "timeout":
+                    timeout = terminal.format_node_duration(
+                        failed_report.keywords.get("timeout", self.default_timeout)
+                    )
+                    self.console.print(
+                        f"[red bold]{'TIMEOUT':>10s}[/] [>{timeout:>9}] [red bold]{failed_report.nodeid}[/]"
+                    )
+
         for warning_report in self.categorized_reports.get("warning", []):
             assert warning_report.nodeid
             test_report = self.test_reports[warning_report.nodeid]
@@ -324,20 +362,27 @@ def plurals(items: Collection | int) -> str:
 
 
 def new_test_status(
+    report: pytest.TestReport,
     nodeid: str,
     status: str,
     color: str,
     duration: float = 0,
-    skip_reason: str | None = None,
+    default_timeout: float = 0,
+    reason: str | None = None,
 ) -> rich.text.Text:
-    elapsed = format_node_duration(duration)
-
     fspath, *extra = nodeid.split("::")
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
-    text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
-    if skip_reason:
-        text += f" ({skip_reason})"
+    if status == "TIMEOUT":
+        timeout = terminal.format_node_duration(
+            report.keywords.get("timeout", default_timeout)
+        )
+        text = f"[bold {color}]{status:>10s}[/] [>{timeout:>9}] {nodeid}"
+    else:
+        elapsed = format_node_duration(duration)
+        text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
+    if reason:
+        text += f" ({reason})"
     return rich.text.Text.from_markup(text)
 
 
@@ -362,20 +407,32 @@ class CodeCache:
 
 def new_live(*args, **kwargs) -> rich.live.Live:
     if sys.stdout.isatty():
-        return rich.live.Live(*args, **kwargs)
+        return Live(*args, **kwargs)
     else:
         return NonTTYLive(*args, **kwargs)
 
 
 class NonTTYLive(rich.live.Live):
     def start(self, refresh: bool = False) -> None:
+        self.printed = False
         return
 
     def refresh(self) -> None:
         return
 
     def stop(self) -> None:
-        self.console.print(self.renderable)
+        if not self.printed:
+            # make sure only printed once
+            self.console.print(self.renderable)
+            self.printed = True
+
+
+class Live(rich.live.Live):
+    def refresh(self) -> None:
+        # disable refresh in non-main thread, for example in pytest-timeout
+        if threading.current_thread() is not threading.main_thread():
+            return
+        return super().refresh()
 
 
 code_cache = CodeCache()

@@ -1,4 +1,5 @@
 [project]
+
 name = "pytest-modern"
 version = "0.2.0"
 authors = [{ name = "ZhengYu, Xu", email = "zen-xu@outlook.com" }]
@@ -26,6 +27,9 @@ classifiers = [
     "Framework :: Pytest",
 ]
 dependencies = ["pytest>=8", "rich>=10"]
+
+[project.optional-dependencies]
+timeout = ["pytest-timeout>=2"]
 
 [project.entry-points.pytest11]
 pytest-modern = "pytest_modern.plugin"
@@ -70,3 +74,6 @@ force-single-line = true
 known-first-party = ["pytest_modern"]
 lines-after-imports = 2
 lines-between-types = 1
+
+[tool.pytest.ini_options]
+timeout = 2
