@@ -9,4 +9,4 @@
 This plugin incorporates ideas from the implementation of [pytest-rich](https://github.com/nicoddemus/pytest-rich) and takes inspiration from the output style of [nextest](https://nexte.st).
 
 With the plugin currently outputs this:
-![image](assets/screenshot.jpg)
+[![asciicast](https://asciinema.org/a/728361.svg)](https://asciinema.org/a/728361)
