@@ -229,9 +229,11 @@ class ModernTerminalReporter:
         }
         if status in ["xfailed", "skipped"]:
             status_param["reason"] = terminal._get_raw_skip_reason(report)
-        elif status == "failed" and getattr(
-            item, "execution_count", 1
-        ) >= get_reruns_count(item):
+        elif (
+            status == "failed"
+            and hasattr(item, "execution_count")
+            and getattr(item, "execution_count", 0) >= get_reruns_count(item)
+        ):
             status_param["status"] = f"TRY {get_reruns_count(item)} FAIL"
         self.test_live.update(new_test_status(item, **status_param))
         self.test_live.refresh()
@@ -329,7 +331,9 @@ class ModernTerminalReporter:
                     )
 
         for warning_report in self.categorized_reports.get("warning", []):
-            assert warning_report.nodeid
+            if not warning_report.nodeid:
+                # from pytest warning
+                continue
             test_report = self.test_reports[warning_report.nodeid]
             duration = format_node_duration(test_report.duration)
             warn_message = rich.syntax.Syntax(
