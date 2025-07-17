@@ -79,3 +79,4 @@ lines-between-types = 1
 [tool.pytest.ini_options]
 timeout = 2
 reruns = 3
+only_rerun = ["ChoiceError"]

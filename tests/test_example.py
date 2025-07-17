@@ -58,14 +58,14 @@ def test_timeout_from_config():
 def test_rerun():
     import random
 
-    if not random.choice([False, True]):
+    if not random.choice([False, False, False, True]):
         raise ChoiceError("choice is not False")
 
 
 def test_rerun_from_config():
     import random
 
-    if not random.choice([False, True]):
+    if not random.choice([False, False, False, True]):
         raise ChoiceError("choice is not False")
 
 
