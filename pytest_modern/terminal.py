@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection
     from pathlib import Path
     from typing import IO
+    from typing import Any
     from typing import Literal
 
     from typing_extensions import TypedDict
@@ -97,10 +98,6 @@ class ModernTerminalReporter:
         # We need to set it to a terminal writer that does nothing
         devnull_path = "nul" if os.name == "nt" else "/dev/null"
         self._tw = TerminalWriter(file=open(devnull_path, "w"))  # noqa: SIM115
-
-        self.default_timeout: float = float(
-            self.config.getoption("timeout") or self.config.getini("timeout") or 0
-        )
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
@@ -236,11 +233,7 @@ class ModernTerminalReporter:
             item, "execution_count", 1
         ) >= get_reruns_count(item):
             status_param["status"] = f"TRY {get_reruns_count(item)} FAIL"
-        self.test_live.update(
-            new_test_status(
-                report, default_timeout=self.default_timeout, **status_param
-            )
-        )
+        self.test_live.update(new_test_status(item, **status_param))
         self.test_live.refresh()
 
         if status in ["failed", "timeout"]:
@@ -329,9 +322,8 @@ class ModernTerminalReporter:
                         crash_message,
                     )
                 elif failed_status == "timeout":
-                    timeout = terminal.format_node_duration(
-                        failed_report.keywords.get("timeout", self.default_timeout)
-                    )
+                    item = self.items[failed_report.nodeid]
+                    timeout = terminal.format_node_duration(get_timeout(item))
                     self.console.print(
                         f"[red bold]{'TIMEOUT':>10s}[/] [>{timeout:>9}] [red bold]{failed_report.nodeid}[/]"
                     )
@@ -371,21 +363,18 @@ def plurals(items: Collection | int) -> str:
 
 
 def new_test_status(
-    report: pytest.TestReport,
+    item: pytest.Item,
     nodeid: str,
     status: str,
     color: str,
     duration: float = 0,
-    default_timeout: float = 0,
     reason: str | None = None,
 ) -> rich.text.Text:
     fspath, *extra = nodeid.split("::")
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
     if status == "TIMEOUT":
-        timeout = terminal.format_node_duration(
-            report.keywords.get("timeout", default_timeout)
-        )
+        timeout = terminal.format_node_duration(get_timeout(item))
         text = f"[bold {color}]{status:>10s}[/] [>{timeout:>9}] {nodeid}"
     else:
         elapsed = format_node_duration(duration)
@@ -490,12 +479,16 @@ def trim_io_space(f: IO[str]) -> IO[str]:
 
 
 def get_reruns_count(item: pytest.Item) -> int:
-    return get_marker_value(item, "flaky", "reruns")
+    return int(get_marker_value(item, "flaky", "reruns"))
+
+
+def get_timeout(item: pytest.Item) -> float:
+    return float(get_marker_value(item, "timeout", "timeout"))
 
 
 def get_marker_value(
     item: pytest.Item, marker_name: str, marker_param: str, marker_param_pos: int = 0
-) -> int:
+) -> Any:
     marker = item.get_closest_marker(marker_name)
     # use the marker as a priority over the global setting.
     if marker is not None:
@@ -513,6 +506,6 @@ def get_marker_value(
         return value
 
     with suppress(TypeError, ValueError):
-        value = int(item.session.config.getini(marker_param))
+        return item.session.config.getini(marker_param)
 
     return value
