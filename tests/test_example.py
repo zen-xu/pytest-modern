@@ -3,6 +3,9 @@ import warnings
 import pytest
 
 
+class ChoiceError(Exception): ...
+
+
 def test_passed():
     a = 1
     b = 2
@@ -49,6 +52,21 @@ def test_timeout_from_config():
     import time
 
     time.sleep(3)
+
+
+@pytest.mark.flaky(reruns=5)
+def test_rerun():
+    import random
+
+    if not random.choice([False, True]):
+        raise ChoiceError("choice is not False")
+
+
+def test_rerun_from_config():
+    import random
+
+    if not random.choice([False, True]):
+        raise ChoiceError("choice is not False")
 
 
 class TestGroup:

@@ -207,20 +207,23 @@ class ModernTerminalReporter:
 
         assert status
         self.status_per_item[report.nodeid] = status
+        item = self.items[report.nodeid]
         status_param = {
             "nodeid": report.nodeid,
             "status": {
-                "running": "RUNNING",
-                "failed": "FAIL",
-                "passed": "PASS",
-                "xfailed": "XFAIL",
-                "skipped": "SKIP",
-                "timeout": "TIMEOUT",
-            }[status],
+                "running": lambda: "RUNNING",
+                "failed": lambda: "FAIL",
+                "passed": lambda: "PASS",
+                "xfailed": lambda: "XFAIL",
+                "skipped": lambda: "SKIP",
+                "timeout": lambda: "TIMEOUT",
+                "rerun": lambda: f"RETRY {getattr(item, 'execution_count', 1)}/{get_reruns_count(item)}",
+            }[status](),
             "color": {
                 "running": "green",
                 "failed": "red",
                 "timeout": "red",
+                "rerun": "magenta",
                 "passed": "green",
                 "xfailed": "yellow",
                 "skipped": "yellow",
@@ -229,6 +232,10 @@ class ModernTerminalReporter:
         }
         if status in ["xfailed", "skipped"]:
             status_param["reason"] = terminal._get_raw_skip_reason(report)
+        elif status == "failed" and getattr(
+            item, "execution_count", 1
+        ) >= get_reruns_count(item):
+            status_param["status"] = f"TRY {get_reruns_count(item)} FAIL"
         self.test_live.update(
             new_test_status(
                 report, default_timeout=self.default_timeout, **status_param
@@ -478,3 +485,32 @@ def trim_io_space(f: IO[str]) -> IO[str]:
             return getattr(self.f, name)
 
     return Wrapper(f)  # type: ignore
+
+
+def get_reruns_count(item: pytest.Item) -> int:
+    return get_marker_value(item, "flaky", "reruns")
+
+
+def get_marker_value(
+    item: pytest.Item, marker_name: str, marker_param: str, marker_param_pos: int = 0
+) -> int:
+    marker = item.get_closest_marker(marker_name)
+    # use the marker as a priority over the global setting.
+    if marker is not None:
+        if marker_param in marker.kwargs:
+            # check for keyword arguments
+            return marker.kwargs[marker_param]
+        elif len(marker.args) > 0:
+            # check for arguments
+            return marker.args[marker_param_pos]
+        else:
+            return 1
+
+    value = item.session.config.getvalue(marker_param)
+    if value is not None:
+        return value
+
+    with suppress(TypeError, ValueError):
+        value = int(item.session.config.getini(marker_param))
+
+    return value
