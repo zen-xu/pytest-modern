@@ -7,7 +7,7 @@ description = "A more modern pytest"
 readme = "README.md"
 requires-python = ">=3.9,<4"
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: MacOS",
@@ -30,6 +30,7 @@ dependencies = ["pytest>=8", "rich>=10"]
 
 [project.optional-dependencies]
 timeout = ["pytest-timeout>=2"]
+rerun = ["pytest-rerunfailures>=15"]
 
 [project.entry-points.pytest11]
 pytest-modern = "pytest_modern.plugin"
@@ -77,3 +78,5 @@ lines-between-types = 1
 
 [tool.pytest.ini_options]
 timeout = 2
+reruns = 3
+only_rerun = ["ChoiceError"]
