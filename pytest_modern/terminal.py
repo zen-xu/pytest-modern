@@ -313,7 +313,9 @@ class ModernTerminalReporter:
         for failed_status in ["failed", "timeout"]:
             for failed_report in self.categorized_reports.get(failed_status, []):
                 try:
-                    crash_message = failed_report.longrepr.reprcrash.message  # type: ignore
+                    crash_message = (
+                        failed_report.longrepr.reprcrash.message.splitlines()[0]
+                    )  # type: ignore
                     crash_message = rich.syntax.Syntax(
                         crash_message, "python", theme="ansi_dark"
                     ).highlight(crash_message)
