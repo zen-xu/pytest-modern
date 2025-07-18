@@ -2,11 +2,14 @@
 This implementation is inspired by https://github.com/nicoddemus/pytest-rich/blob/main/src/pytest_rich/traceback.py
 """
 
+from __future__ import annotations
+
 import ast
 
-from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from dataclasses import field
+from typing import TYPE_CHECKING
 
 import rich.padding
 
@@ -33,6 +36,10 @@ from rich.syntax import SyntaxTheme
 from rich.text import Text
 from rich.theme import Theme
 from rich.traceback import PathHighlighter
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 @dataclass
@@ -85,9 +92,9 @@ class ModernExceptionChainRepr:
         path_highlighter = PathHighlighter()
         repr_highlighter = ReprHighlighter() if not self.no_syntax else lambda x: x
         theme = self.get_theme()
-        code_cache: dict[str, str] = {}
+        code_cache: dict[str, str | None] = {}
 
-        def read_code(filename: str) -> str:
+        def read_code(filename: str) -> str | None:
             """
             Read files and cache results on filename.
 
@@ -98,8 +105,12 @@ class ModernExceptionChainRepr:
                 str: Contents of file
             """
             code = code_cache.get(filename)
+
             if not code:
-                with open(filename, encoding="utf-8", errors="replace") as code_file:
+                with (
+                    suppress(FileNotFoundError),
+                    open(filename, encoding="utf-8", errors="replace") as code_file,
+                ):
                     code = code_file.read()
                 code_cache[filename] = code
             return code
@@ -116,15 +127,15 @@ class ModernExceptionChainRepr:
             Returns:
                 str: Function name
             """
-            code = read_code(filename)
-            tree = ast.parse(code)
-            for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.FunctionDef)
-                    and node.end_lineno is not None
-                    and node.lineno <= lineno <= node.end_lineno
-                ):
-                    return node.name
+            if code := read_code(filename):
+                tree = ast.parse(code)
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, ast.FunctionDef)
+                        and node.end_lineno is not None
+                        and node.lineno <= lineno <= node.end_lineno
+                    ):
+                        return node.name
             return "???"
 
         def get_args(reprfuncargs: ReprFuncArgs) -> Text:
@@ -179,24 +190,24 @@ class ModernExceptionChainRepr:
             if args:
                 yield args
 
-            code = read_code(filename)
-            syntax = Syntax(
-                code,
-                self.get_lexer("python"),
-                theme=theme,
-                line_numbers=True,
-                line_range=(
-                    lineno - self.extra_lines,
-                    lineno + self.extra_lines,
-                ),
-                highlight_lines={lineno},
-                word_wrap=self.word_wrap,
-                code_width=120,
-                indent_guides=self.indent_guides,
-                dedent=False,
-            )
-            yield ""
-            yield syntax
+            if code := read_code(filename):
+                syntax = Syntax(
+                    code,
+                    self.get_lexer("python"),
+                    theme=theme,
+                    line_numbers=True,
+                    line_range=(
+                        lineno - self.extra_lines,
+                        lineno + self.extra_lines,
+                    ),
+                    highlight_lines={lineno},
+                    word_wrap=self.word_wrap,
+                    code_width=120,
+                    indent_guides=self.indent_guides,
+                    dedent=False,
+                )
+                yield ""
+                yield syntax
 
             if message:
                 line_pointer = "> " if options.legacy_windows else "❱ "
