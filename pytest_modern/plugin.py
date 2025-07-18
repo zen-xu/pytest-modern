@@ -23,6 +23,12 @@ def pytest_addoption(parser: Parser):
         default=False,
         help="Disable color output",
     )
+    group.addoption(
+        "--modern-no-syntax",
+        action="store_true",
+        default=False,
+        help="Disable syntax highlighting",
+    )
     with suppress(ImportError):
         import pytest_rerunfailures as _  # noqa: F401
 

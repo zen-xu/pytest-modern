@@ -41,6 +41,7 @@ class ModernExceptionChainRepr:
     chain: ExceptionChainRepr
     extra_lines: int = 3
     theme: str = "ansi_dark"
+    no_syntax: bool = False
     word_wrap: bool = True
     indent_guides: bool = True
     error_messages: list[str] = field(default_factory=list)
@@ -82,7 +83,7 @@ class ModernExceptionChainRepr:
         self, chain: ExceptionChainRepr, options: ConsoleOptions
     ) -> RenderResult:
         path_highlighter = PathHighlighter()
-        repr_highlighter = ReprHighlighter()
+        repr_highlighter = ReprHighlighter() if not self.no_syntax else lambda x: x
         theme = self.get_theme()
         code_cache: dict[str, str] = {}
 
@@ -134,7 +135,7 @@ class ModernExceptionChainRepr:
                     Text.assemble(
                         (arg[0], "name.variable"),
                         (" = ", "repr.equals"),
-                        (arg[1], "token"),
+                        (arg[1], self.get_lexer("token")),
                     )
                 )
                 if reprfuncargs.args[-1] != arg:
@@ -181,7 +182,7 @@ class ModernExceptionChainRepr:
             code = read_code(filename)
             syntax = Syntax(
                 code,
-                "python",
+                self.get_lexer("python"),
                 theme=theme,
                 line_numbers=True,
                 line_range=(
@@ -203,7 +204,7 @@ class ModernExceptionChainRepr:
                 yield Text.assemble(
                     (str(lineno), "pygments.number"),
                     ": ",
-                    (message, "traceback.exc_type"),
+                    (message, self.get_lexer("traceback.exc_type")),
                 )
                 yield Text.assemble(
                     (line_pointer, Style(color="red")),
@@ -225,3 +226,6 @@ class ModernExceptionChainRepr:
         object.
         """
         return Syntax.get_theme(self.theme)
+
+    def get_lexer(self, lexer: str) -> str:
+        return "text" if self.no_syntax else lexer
