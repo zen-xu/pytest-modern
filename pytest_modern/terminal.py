@@ -281,6 +281,13 @@ class ModernTerminalReporter:
         self.print_summary(session, exitstatus)
 
     def print_summary(self, session: pytest.Session, exitstatus: int | pytest.ExitCode):
+        if benchmark_session := getattr(session.config, "_benchmarksession", None):
+            from .benchmark_report import BenchmarkResult
+
+            if benchmark_session.groups:
+                self.console.print("──────────")
+                self.console.print(BenchmarkResult(benchmark_session, self.config))
+
         self.console.print("──────────")
         session_duration = format_node_duration(self.total_duration)
         stat_counts = {
