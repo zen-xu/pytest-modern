@@ -325,7 +325,7 @@ class ModernTerminalReporter:
                     )
                 elif failed_status == "timeout":
                     item = self.items[failed_report.nodeid]
-                    timeout = terminal.format_node_duration(get_timeout(item))
+                    timeout = format_node_duration(get_timeout(item))
                     self.console.print(
                         f"[red bold]{'TIMEOUT':>10s}[/] [>{timeout:>9}] [red bold]{failed_report.nodeid}[/]"
                     )
@@ -347,18 +347,11 @@ class ModernTerminalReporter:
 
     @property
     def no_header(self) -> bool:
-        return self.config.getoption("no_header")
+        return self.config.getoption("no_header")  # type: ignore
 
     @property
     def no_summary(self) -> bool:
-        return self.config.getoption("no_summary")
-
-
-def format_node_duration(seconds: float) -> str:
-    duration = terminal.format_node_duration(seconds).strip()
-    if len(duration) < 10:
-        return f"{duration:>10s}"
-    return duration
+        return self.config.getoption("no_summary")  # type: ignore
 
 
 def plurals(items: Collection | int) -> str:
@@ -378,7 +371,7 @@ def new_test_status(
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
     if status == "TIMEOUT":
-        timeout = terminal.format_node_duration(get_timeout(item))
+        timeout = format_node_duration(get_timeout(item))
         text = f"[bold {color}]{status:>10s}[/] [>{timeout:>9}] {nodeid}"
     else:
         elapsed = format_node_duration(duration)
@@ -513,3 +506,26 @@ def get_marker_value(
         return item.session.config.getini(marker_param)
 
     return value
+
+
+def format_node_duration(seconds: float) -> str:
+    """Format the given seconds in a human readable manner to show in the test progress."""
+    # The formatting is designed to be compact and readable, with at most 7 characters
+    # for durations below 100 hours.
+    if seconds < 0.00001:
+        return f" {seconds * 1000000:.3f}us"
+    if seconds < 0.0001:
+        return f" {seconds * 1000000:.2f}us"
+    if seconds < 0.001:
+        return f" {seconds * 1000000:.1f}us"
+    if seconds < 0.01:
+        return f" {seconds * 1000:.3f}ms"
+    if seconds < 0.1:
+        return f" {seconds * 1000:.2f}ms"
+    if seconds < 1:
+        return f" {seconds * 1000:.1f}ms"
+    if seconds < 60:
+        return f" {seconds:.3f}s"
+    if seconds < 3600:
+        return f" {seconds // 60:.0f}m {seconds % 60:.0f}s"
+    return f" {seconds // 3600:.0f}h {(seconds % 3600) // 60:.0f}m"
