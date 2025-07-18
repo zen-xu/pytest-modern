@@ -9,6 +9,7 @@ import ast
 from contextlib import suppress
 from dataclasses import dataclass
 from dataclasses import field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import rich.padding
@@ -107,11 +108,8 @@ class ModernExceptionChainRepr:
             code = code_cache.get(filename)
 
             if not code:
-                with (
-                    suppress(FileNotFoundError),
-                    open(filename, encoding="utf-8", errors="replace") as code_file,
-                ):
-                    code = code_file.read()
+                with suppress(OSError):
+                    code = Path(filename).read_text("utf-8", "replace")
                 code_cache[filename] = code
             return code
 
