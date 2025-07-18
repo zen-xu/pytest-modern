@@ -302,7 +302,7 @@ class ModernTerminalReporter:
         )
         summary_color = "green" if exitstatus == 0 else "red"
         self.console.print(
-            f"   [{summary_color} bold]Summary[/] [{session_duration}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
+            f"   [{summary_color} bold]Summary[/] [{session_duration:>10s}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
 
         for failed_status in ["failed", "timeout"]:
@@ -320,14 +320,14 @@ class ModernTerminalReporter:
                 if failed_status == "failed":
                     duration = format_node_duration(failed_report.duration)
                     self.console.print(
-                        f"[red bold]{'FAIL':>10s}[/] [{duration}] [red bold]{failed_report.nodeid}[/]",
+                        f"[red bold]{'FAIL':>10s}[/] [{duration:>10s}] [red bold]{failed_report.nodeid}[/]",
                         crash_message,
                     )
                 elif failed_status == "timeout":
                     item = self.items[failed_report.nodeid]
-                    timeout = format_node_duration(get_timeout(item))
+                    timeout = pad_duration(get_timeout(item), ">")
                     self.console.print(
-                        f"[red bold]{'TIMEOUT':>10s}[/] [>{timeout:>9}] [red bold]{failed_report.nodeid}[/]"
+                        f"[red bold]{'TIMEOUT':>10s}[/] [{timeout}] [red bold]{failed_report.nodeid}[/]"
                     )
 
         for warning_report in self.categorized_reports.get("warning", []):
@@ -335,7 +335,7 @@ class ModernTerminalReporter:
                 # from pytest warning
                 continue
             test_report = self.test_reports[warning_report.nodeid]
-            duration = format_node_duration(test_report.duration)
+            duration = pad_duration(test_report.duration)
             warn_message = rich.syntax.Syntax(
                 repr(warning_report.message.message), "python", theme="ansi_dark"
             ).highlight(repr(warning_report.message.message))
@@ -371,11 +371,9 @@ def new_test_status(
     func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
     nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
     if status == "TIMEOUT":
-        timeout = format_node_duration(get_timeout(item))
-        text = f"[bold {color}]{status:>10s}[/] [>{timeout:>9}] {nodeid}"
+        text = f"[bold {color}]{status:>10s}[/] [{pad_duration(get_timeout(item), '>')}]] {nodeid}"
     else:
-        elapsed = format_node_duration(duration)
-        text = f"[bold {color}]{status:>10s}[/] [{elapsed}] {nodeid}"
+        text = f"[bold {color}]{status:>10s}[/] [{pad_duration(duration)}] {nodeid}"
     if reason:
         text += f" ({reason})"
     return rich.text.Text.from_markup(text)
@@ -529,3 +527,9 @@ def format_node_duration(seconds: float) -> str:
     if seconds < 3600:
         return f" {seconds // 60:.0f}m {seconds % 60:.0f}s"
     return f" {seconds // 3600:.0f}h {(seconds % 3600) // 60:.0f}m"
+
+
+def pad_duration(seconds: float, prefix: str = "") -> str:
+    pad = 10 - len(prefix)
+    duration = format_node_duration(seconds)
+    return f"{prefix}{duration:>{pad}s}"
