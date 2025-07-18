@@ -31,6 +31,7 @@ dependencies = ["pytest>=8", "rich>=10"]
 [project.optional-dependencies]
 timeout = ["pytest-timeout>=2"]
 rerun = ["pytest-rerunfailures>=15"]
+benchmark = ["pytest-benchmark>=5"]
 
 [project.entry-points.pytest11]
 pytest-modern = "pytest_modern.plugin"
