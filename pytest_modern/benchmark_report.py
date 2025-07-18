@@ -157,7 +157,7 @@ class BenchmarkResult:
                 )
 
         if compares:
-            yield Text.from_markup("[magenta] Benchmark Summary (by mean)[/]")
+            yield Text.from_markup("[magenta bold] Benchmark Summary (by mean)[/]")
             table = Table(
                 box=rich.box.SIMPLE,
                 padding=(0, 2),
