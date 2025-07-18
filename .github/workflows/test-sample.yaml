@@ -30,5 +30,8 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest --benchmark-disable
         continue-on-error: true
+
+      - name: Run benchmark
+        run: uv run pytest --timeout=0 --benchmark-only
