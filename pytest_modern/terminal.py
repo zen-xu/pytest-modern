@@ -257,7 +257,11 @@ class ModernTerminalReporter:
                 )
             else:
                 assert isinstance(report.longrepr, ExceptionChainRepr)
-                tb = ModernExceptionChainRepr(report.nodeid, report.longrepr)
+                tb = ModernExceptionChainRepr(
+                    report.nodeid,
+                    report.longrepr,
+                    no_syntax=self.no_syntax,
+                )
                 self.console.print(tb)
 
     def pytest_runtest_logfinish(
@@ -312,7 +316,9 @@ class ModernTerminalReporter:
                         failed_report.longrepr.reprcrash.message.splitlines()[0]
                     )  # type: ignore
                     crash_message = rich.syntax.Syntax(
-                        crash_message, "python", theme="ansi_dark"
+                        crash_message,
+                        "python" if not self.no_syntax else "text",
+                        theme="ansi_dark",
                     ).highlight(crash_message)
                     crash_message.rstrip()
                 except Exception:
@@ -337,7 +343,9 @@ class ModernTerminalReporter:
             test_report = self.test_reports[warning_report.nodeid]
             duration = pad_duration(test_report.duration)
             warn_message = rich.syntax.Syntax(
-                repr(warning_report.message.message), "python", theme="ansi_dark"
+                repr(warning_report.message.message),
+                "python" if not self.no_syntax else "text",
+                theme="ansi_dark",
             ).highlight(repr(warning_report.message.message))
             warn_message.rstrip()
             self.console.print(
@@ -352,6 +360,10 @@ class ModernTerminalReporter:
     @property
     def no_summary(self) -> bool:
         return self.config.getoption("no_summary")  # type: ignore
+
+    @property
+    def no_syntax(self) -> bool:
+        return self.config.getoption("modern_no_syntax")  # type: ignore
 
 
 def plurals(items: Collection | int) -> str:
