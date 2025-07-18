@@ -21,7 +21,9 @@ import rich.theme
 
 from _pytest import terminal
 from _pytest._code.code import ExceptionChainRepr
+from _pytest._code.code import ExceptionRepr
 from _pytest._io import TerminalWriter
+from rich.highlighter import ReprHighlighter
 
 from .header import generate_header_group
 from .traceback import ModernExceptionChainRepr
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
     from typing import Any
     from typing import Literal
 
+    from _pytest._code.code import ExceptionRepr
     from typing_extensions import TypedDict
 
     Status = Literal[
@@ -352,6 +355,12 @@ class ModernTerminalReporter:
                 f"[yellow bold]{'WARN':>10s}[/] [{duration}] [yellow bold]{warning_report.nodeid}[/]",
                 warn_message,
             )
+
+    def pytest_internalerror(self, excrepr: ExceptionRepr) -> bool:
+        highlighter = ReprHighlighter() if not self.no_syntax else lambda x: x
+        for line in str(excrepr).splitlines():
+            self.console.print("[red bold]INTERNALERROR>[/]", highlighter(line))
+        return True
 
     @property
     def no_header(self) -> bool:
