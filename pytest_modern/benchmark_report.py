@@ -90,11 +90,11 @@ class BenchmarkResult:
                 else f"[yellow]benchmark: {group_name}[/]",
                 box=rich.box.SIMPLE,
                 padding=(0, 2),
-                show_header=group_name is not None,
             )
             for label_header in labels.values():
                 table.add_column(
                     Text(label_header, style=rich.style.Style(bold=True, dim=True)),
+                    overflow="fold",
                 )
 
             for benchmark in benchmarks:
