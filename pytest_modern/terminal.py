@@ -288,6 +288,11 @@ class ModernTerminalReporter:
                 self.console.print("──────────")
                 self.console.print(BenchmarkResult(benchmark_session, self.config))
 
+        if coverage_plugin := self.config.pluginmanager.getplugin("_cov"):
+            from .coverage_report import CoverageReport
+
+            self.console.print(CoverageReport(self.config, coverage_plugin))  # type: ignore
+
         self.console.print("──────────")
         session_duration = format_node_duration(self.total_duration)
         stat_counts = {
