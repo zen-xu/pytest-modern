@@ -16,6 +16,7 @@ import rich.padding
 import rich.panel
 import rich.progress
 import rich.rule
+import rich.style
 import rich.syntax
 import rich.text
 import rich.theme
@@ -415,15 +416,29 @@ def new_test_status(
     reason: str | None = None,
 ) -> rich.text.Text:
     fspath, *extra = nodeid.split("::")
-    func = "[blue]::[/]".join(f"[bold blue]{f}[/]" for f in extra)
-    nodeid = f"[bold cyan]{fspath}[/][cyan]::[/][bold blue]{func}[/]"
+
     if status == "TIMEOUT":
-        text = f"[bold {color}]{status:>10s}[/] [{pad_duration(get_timeout(item), '>')}]] {nodeid}"
+        duration_text = f"[{pad_duration(get_timeout(item), '>')}]"
     else:
-        text = f"[bold {color}]{status:>10s}[/] [{pad_duration(duration)}] {nodeid}"
-    if reason:
-        text += f" ({reason})"
-    return rich.text.Text.from_markup(text)
+        duration_text = f"[{pad_duration(duration)}]"
+
+    text = rich.text.Text.assemble(
+        (f"{status:>10s}", rich.style.Style(color=color, bold=True)),
+        " ",
+        duration_text,
+        " ",
+        (fspath, rich.style.Style(color="cyan", bold=True)),
+        ("::", rich.style.Style(color="blue")),
+        "",
+        (
+            "::".join(extra),
+            rich.style.Style(color="blue", bold=True),
+        ),
+        " ",
+        f"({reason})" if reason else "",
+    )
+    text.rstrip()
+    return text
 
 
 def node_id_text(nodeid: str) -> str:
