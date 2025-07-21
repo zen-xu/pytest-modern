@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class BenchmarkResult:
+class BenchmarkReport:
     session: BenchmarkSession
     config: pytest.Config
 

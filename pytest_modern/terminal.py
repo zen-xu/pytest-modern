@@ -282,11 +282,11 @@ class ModernTerminalReporter:
 
     def print_summary(self, session: pytest.Session, exitstatus: int | pytest.ExitCode):
         if benchmark_session := getattr(session.config, "_benchmarksession", None):
-            from .benchmark_report import BenchmarkResult
+            from .benchmark_report import BenchmarkReport
 
             if benchmark_session.groups:
                 self.console.print("──────────")
-                self.console.print(BenchmarkResult(benchmark_session, self.config))
+                self.console.print(BenchmarkReport(benchmark_session, self.config))
 
         if coverage_plugin := self.config.pluginmanager.getplugin("_cov"):
             from .coverage_report import CoverageReport
