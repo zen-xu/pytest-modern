@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pytest
+import rich.console
 import rich.live
 import rich.padding
 import rich.panel
@@ -282,18 +283,22 @@ class ModernTerminalReporter:
 
     def print_summary(self, session: pytest.Session, exitstatus: int | pytest.ExitCode):
         if benchmark_session := getattr(session.config, "_benchmarksession", None):
-            from .benchmark_report import BenchmarkResult
+            from .benchmark_report import BenchmarkReport
 
-            if benchmark_session.groups:
-                self.console.print("──────────")
-                self.console.print(BenchmarkResult(benchmark_session, self.config))
+            self.console.print(BenchmarkReport(benchmark_session, self.config))
 
         if coverage_plugin := self.config.pluginmanager.getplugin("_cov"):
             from .coverage_report import CoverageReport
 
             self.console.print(CoverageReport(self.config, coverage_plugin))  # type: ignore
 
-        self.console.print("──────────")
+        self.console.print(self.summary(session, exitstatus))
+
+    @rich.console.group()
+    def summary(
+        self, session: pytest.Session, exitstatus: int | pytest.ExitCode
+    ) -> rich.console.RenderResult:
+        yield "──────────"
         session_duration = format_node_duration(self.total_duration)
         stat_counts = {
             stat_type: len(self.categorized_reports[stat_type])
@@ -320,7 +325,7 @@ class ModernTerminalReporter:
             if count > 0
         )
         summary_color = "green" if exitstatus == 0 else "red"
-        self.console.print(
+        yield (
             f"   [{summary_color} bold]Summary[/] [{session_duration:>10s}] [bold]{sum(stat_counts.values())}[/] tests run: {stats}"
         )
 
@@ -340,14 +345,17 @@ class ModernTerminalReporter:
                     crash_message = ""
                 if failed_status == "failed":
                     duration = format_node_duration(failed_report.duration)
-                    self.console.print(
-                        f"[red bold]{'FAIL':>10s}[/] [{duration:>10s}] [red bold]{failed_report.nodeid}[/]",
+                    yield rich.text.Text.assemble(
+                        rich.text.Text.from_markup(
+                            f"[red bold]{'FAIL':>10s}[/] [{duration:>10s}] [red bold]{failed_report.nodeid}[/]"
+                        ),
+                        " ",
                         crash_message,
                     )
                 elif failed_status == "timeout":
                     item = self.items[failed_report.nodeid]
                     timeout = pad_duration(get_timeout(item), ">")
-                    self.console.print(
+                    yield (
                         f"[red bold]{'TIMEOUT':>10s}[/] [{timeout}] [red bold]{failed_report.nodeid}[/]"
                     )
 
@@ -363,8 +371,11 @@ class ModernTerminalReporter:
                 theme="ansi_dark",
             ).highlight(repr(warning_report.message.message))
             warn_message.rstrip()
-            self.console.print(
-                f"[yellow bold]{'WARN':>10s}[/] [{duration}] [yellow bold]{warning_report.nodeid}[/]",
+            yield rich.text.Text.assemble(
+                rich.text.Text.from_markup(
+                    f"[yellow bold]{'WARN':>10s}[/] [{duration}] [yellow bold]{warning_report.nodeid}[/]"
+                ),
+                " ",
                 warn_message,
             )
 

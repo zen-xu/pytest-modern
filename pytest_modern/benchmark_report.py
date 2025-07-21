@@ -23,13 +23,17 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class BenchmarkResult:
+class BenchmarkReport:
     session: BenchmarkSession
     config: pytest.Config
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
+        if not self.session.groups:
+            return
+
+        yield "──────────"
         yield Text.from_markup("[bold magenta] Benchmark[/]")
 
         scale_unit = partial(
