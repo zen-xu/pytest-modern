@@ -76,7 +76,6 @@ class ModernTerminalReporter:
     def __init__(
         self,
         config: pytest.Config,
-        color: bool,
         console: rich.console.Console | None = None,
     ):
         self.config = config
@@ -84,7 +83,7 @@ class ModernTerminalReporter:
             highlight=False,
             force_terminal=True,
             width=None if sys.stdout.isatty() else 200,
-            color_system="auto" if color else None,
+            color_system="auto" if not self.no_color else None,
         )
         self.console.file = trim_io_space(self.console.file)
 
@@ -386,16 +385,20 @@ class ModernTerminalReporter:
         return True
 
     @property
+    def no_color(self) -> bool:
+        return self.config.getoption("color") == "no"
+
+    @property
     def no_header(self) -> bool:
         return self.config.getoption("no_header")  # type: ignore
 
     @property
     def no_summary(self) -> bool:
-        return self.config.getoption("no_summary")  # type: ignore
+        return self.config.getoption(name="no_summary")  # type: ignore
 
     @property
     def no_syntax(self) -> bool:
-        return self.config.getoption("modern_no_syntax")  # type: ignore
+        return self.config.getoption("code_highlight") == "no"  # type: ignore
 
 
 def plurals(items: Collection | int) -> str:

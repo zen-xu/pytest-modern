@@ -17,18 +17,6 @@ def pytest_addoption(parser: Parser):
         default=False,
         help="Disable pytest-modern",
     )
-    group.addoption(
-        "--modern-no-color",
-        action="store_true",
-        default=False,
-        help="Disable color output",
-    )
-    group.addoption(
-        "--modern-no-syntax",
-        action="store_true",
-        default=False,
-        help="Disable syntax highlighting",
-    )
     with suppress(ImportError):
         import pytest_rerunfailures as _  # noqa: F401
 
@@ -57,8 +45,6 @@ def pytest_configure(config: Config) -> None:
                 config.option.only_rerun = only_rerun
 
         standard_reporter: Any = config.pluginmanager.getplugin("terminalreporter")
-        modern_reporter = ModernTerminalReporter(
-            standard_reporter.config, color=not config.getoption("modern_no_color")
-        )
+        modern_reporter = ModernTerminalReporter(standard_reporter.config)
         config.pluginmanager.unregister(standard_reporter)
         config.pluginmanager.register(modern_reporter, "terminalreporter")
