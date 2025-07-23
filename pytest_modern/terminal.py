@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import pytest
 import rich.console
 import rich.live
-import rich.markup
 import rich.padding
 import rich.panel
 import rich.rule
@@ -49,6 +48,7 @@ if TYPE_CHECKING:
         "failed",
         "skipped",
         "xfailed",
+        "xpassed",
         "warning",
         "timeout",
     ]
@@ -104,6 +104,7 @@ class ModernTerminalReporter:
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         title_msg = "test session starts"
+        title: rich.console.RenderableType
         if self.no_header:
             title = rich.rule.Rule(title_msg, style="default")
         else:
@@ -222,6 +223,10 @@ class ModernTerminalReporter:
                     crash_message: str = report.longrepr.reprcrash.message  # type: ignore
                     if crash_message.startswith("Failed: Timeout"):
                         status = "timeout"
+            elif status == "passed":
+                status, *_ = self.config.hook.pytest_report_teststatus(
+                    report=report, config=self.config
+                )
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
         elif report.when == "teardown":
@@ -237,6 +242,7 @@ class ModernTerminalReporter:
                 "failed": lambda: "FAIL",
                 "passed": lambda: "PASS",
                 "xfailed": lambda: "XFAIL",
+                "xpassed": lambda: "XPASS",
                 "skipped": lambda: "SKIP",
                 "timeout": lambda: "TIMEOUT",
                 "rerun": lambda: f"RETRY {getattr(item, 'execution_count', 1)}/{get_reruns_count(item)}",
@@ -248,6 +254,7 @@ class ModernTerminalReporter:
                 "rerun": "magenta",
                 "passed": "green",
                 "xfailed": "yellow",
+                "xpassed": "yellow",
                 "skipped": "yellow",
             }[status],
             "duration": report.duration,
