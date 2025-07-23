@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import rich.box
+import rich.markup
 import rich.style
 
 from rich.table import Table
@@ -28,6 +29,7 @@ class FileReport:
     stmts: str
     miss: str
     cover: str
+    missing: list[str]
 
 
 @dataclass
@@ -60,8 +62,13 @@ class CoverageReport:
         reports = list(self.yield_report(report))
         [total] = [item for item in reports if item.name == "TOTAL"]
         reports = [item for item in reports if item.name != "TOTAL"]
-        for column in ["name", "stmts", "miss", "cover"]:
+        columns = ["name", "stmts", "miss", "cover"] + (
+            ["missing"] if "term-missing" in self.config.getoption("cov_report") else []
+        )
+        for column in columns:
             foot_col_value = getattr(total, column)
+            if column == "missing":
+                foot_col_value = ""
             table.add_column(
                 header=Text(
                     column.title(), style=rich.style.Style(bold=True, dim=True)
@@ -83,6 +90,7 @@ class CoverageReport:
                 file_report.stmts,
                 Text(file_report.miss, style=rich.style.Style(color="red")),
                 file_report.cover,
+                *([] if "missing" not in columns else [", ".join(file_report.missing)]),
             )
 
         yield table
@@ -95,5 +103,9 @@ class CoverageReport:
                 continue
             if not start or line.startswith("---"):
                 continue
-            file, stmts, miss, cover = line.split()
-            yield FileReport(file, stmts, miss, cover)
+            file, stmts, miss, cover, *location = line.split()
+            yield FileReport(
+                file, stmts, miss, cover, [item.strip(",") for item in location]
+            )
+            if file == "TOTAL":
+                return
