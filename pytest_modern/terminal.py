@@ -90,6 +90,7 @@ class ModernTerminalReporter:
         self.total_items_collected = 0
         self.total_items_completed = 0
         self.collect_stats: dict[CollectCategory, list[pytest.Item]] = defaultdict(list)
+        self.collect_errors: dict[NodeId, ModernExceptionChainRepr] = {}
         self.items_per_file: dict[Path, list[pytest.Item]] = {}
         self.status_per_item: dict[NodeId, Status] = {}
         self.items: dict[NodeId, pytest.Item] = {}
@@ -120,6 +121,13 @@ class ModernTerminalReporter:
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
         items = [x for x in report.result if isinstance(x, pytest.Item)]
         if report.failed:
+            tb = ModernExceptionChainRepr(
+                report.nodeid,
+                report.longrepr,
+                no_syntax=self.no_syntax,
+                extra_lines=0,
+            )
+            self.collect_errors[report.nodeid] = tb
             self.collect_stats["error"].extend(items)
         elif report.skipped:
             self.collect_stats["skipped"].extend(items)
@@ -154,9 +162,9 @@ class ModernTerminalReporter:
             )
         if skipped := self.collect_stats["skipped"]:
             extra_line += f", [bold]{len(skipped)}[/] [bold yellow]skipped[/]"
-        if errors := self.collect_stats["error"]:
+        if errors := self.collect_errors:
             extra_line += (
-                f", [bold]{len(errors)}[/] [bold red]error[/]{plurals(errors)}"
+                f", [bold]{len(errors)}[/] [bold red]error{plurals(errors)}[/]"
             )
         if extra_line:
             line = f"{line} ({extra_line.lstrip(', ')})"
@@ -185,6 +193,9 @@ class ModernTerminalReporter:
             add_to_tree(tree, trie)
             for child in tree.children:
                 self.console.print(child)
+        for nodeid, collect_error in self.collect_errors.items():
+            self.console.print(f"[red bold]COLLECT ERROR >> {nodeid}[/]")
+            self.console.print(collect_error)
 
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]

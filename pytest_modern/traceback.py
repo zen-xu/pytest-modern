@@ -166,8 +166,7 @@ class ModernExceptionChainRepr:
 
         for _, entry in loop_last(chain.reprtraceback.reprentries):
             assert isinstance(entry, ReprEntry)
-            if entry.reprfuncargs is None:
-                continue
+
             assert entry.reprfileloc is not None
             filename = entry.reprfileloc.path
             lineno = entry.reprfileloc.lineno
@@ -184,9 +183,10 @@ class ModernExceptionChainRepr:
             )
             yield text
 
-            args = get_args(entry.reprfuncargs)
-            if args:
-                yield args
+            if entry.reprfuncargs:
+                args = get_args(entry.reprfuncargs)
+                if args:
+                    yield args
 
             if code := read_code(filename):
                 syntax = Syntax(
