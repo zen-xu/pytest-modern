@@ -12,14 +12,13 @@ from typing import TYPE_CHECKING
 import pytest
 import rich.console
 import rich.live
+import rich.markup
 import rich.padding
 import rich.panel
-import rich.progress
 import rich.rule
 import rich.style
 import rich.syntax
 import rich.text
-import rich.theme
 
 from _pytest import terminal
 from _pytest._code.code import ExceptionChainRepr
@@ -163,6 +162,28 @@ class ModernTerminalReporter:
 
         self.collect_live.update(line)
         self.collect_live.stop()
+
+        if self.config.getoption("collectonly"):
+            from rich.tree import Tree
+
+            def build_trie(paths):
+                root = {}
+                for nodes in paths:
+                    curr_node = root
+                    for node in nodes:
+                        curr_node = curr_node.setdefault(str(node), {})
+                return root
+
+            def add_to_tree(rich_tree: Tree, trie_node):
+                for node, subtree in trie_node.items():
+                    branch = rich_tree.add(node)
+                    add_to_tree(branch, subtree)
+
+            trie = build_trie([item.listchain()[1:] for item in session.items])
+            tree = Tree("root")
+            add_to_tree(tree, trie)
+            for child in tree.children:
+                self.console.print(child)
 
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
