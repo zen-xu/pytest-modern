@@ -239,18 +239,14 @@ class ModernTerminalReporter:
             else:
                 status = "running"
         elif report.when == "call":
-            status = report.outcome
-            if status == "skipped":
-                status = "xfailed"
-            elif status == "failed":
+            status, *_ = self.config.hook.pytest_report_teststatus(
+                report=report, config=self.config
+            )
+            if status == "failed":
                 with suppress(Exception):
                     crash_message: str = report.longrepr.reprcrash.message  # type: ignore
                     if crash_message.startswith("Failed: Timeout"):
                         status = "timeout"
-            elif status == "passed":
-                status, *_ = self.config.hook.pytest_report_teststatus(
-                    report=report, config=self.config
-                )
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
         elif report.when == "teardown":
@@ -270,7 +266,7 @@ class ModernTerminalReporter:
                 "skipped": lambda: "SKIP",
                 "timeout": lambda: "TIMEOUT",
                 "rerun": lambda: f"RETRY {getattr(item, 'execution_count', 1)}/{get_reruns_count(item)}",
-            }[status](),
+            }.get(status, status.upper)(),
             "color": {
                 "running": "green",
                 "failed": "red",
@@ -280,7 +276,7 @@ class ModernTerminalReporter:
                 "xfailed": "yellow",
                 "xpassed": "yellow",
                 "skipped": "yellow",
-            }[status],
+            }.get(status, terminal._color_for_type_default),
             "duration": report.duration,
         }
         if status in ["xfailed", "skipped"]:
@@ -353,18 +349,8 @@ class ModernTerminalReporter:
         yield "──────────"
         session_duration = format_node_duration(self.total_duration)
         stat_counts = {
-            stat_type: len(self.categorized_reports[stat_type])
-            for stat_type in [
-                "passed",
-                "xfailed",
-                "xpassed",
-                "failed",
-                "skipped",
-                "deselected",
-                "warning",
-                "error",
-                "timeout",
-            ]
+            stat_type: len(reports)
+            for stat_type, reports in self.categorized_reports.items()
         }
         color_for_type = {
             **terminal._color_for_type,
