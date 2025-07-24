@@ -23,10 +23,13 @@ from _pytest import terminal
 from _pytest._code.code import ExceptionChainRepr
 from _pytest._code.code import ExceptionRepr
 from _pytest._io import TerminalWriter
+from _pytest.reports import BaseReport
+from _pytest.reports import CollectReport
 from rich.highlighter import ReprHighlighter
 
 from .header import generate_header_group
 from .traceback import ModernExceptionChainRepr
+from .traceback import ModernExceptionInfoRepr
 
 
 if TYPE_CHECKING:
@@ -90,7 +93,7 @@ class ModernTerminalReporter:
         self.total_items_collected = 0
         self.total_items_completed = 0
         self.collect_stats: dict[CollectCategory, list[pytest.Item]] = defaultdict(list)
-        self.collect_errors: dict[NodeId, ModernExceptionChainRepr] = {}
+        self.collect_errors: dict[NodeId, rich.console.RenderableType] = {}
         self.items_per_file: dict[Path, list[pytest.Item]] = {}
         self.status_per_item: dict[NodeId, Status] = {}
         self.items: dict[NodeId, pytest.Item] = {}
@@ -121,13 +124,6 @@ class ModernTerminalReporter:
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
         items = [x for x in report.result if isinstance(x, pytest.Item)]
         if report.failed:
-            tb = ModernExceptionChainRepr(
-                report.nodeid,
-                report.longrepr,
-                no_syntax=self.no_syntax,
-                extra_lines=0,
-            )
-            self.collect_errors[report.nodeid] = tb
             self.collect_stats["error"].extend(items)
         elif report.skipped:
             self.collect_stats["skipped"].extend(items)
@@ -214,6 +210,23 @@ class ModernTerminalReporter:
             fslocation=fslocation, message=warning_message, nodeid=nodeid
         )
         self.categorized_reports["warning"].append(warning_report)
+
+    def pytest_exception_interact(
+        self, call: pytest.CallInfo[None], report: BaseReport
+    ) -> None:
+        if isinstance(report, CollectReport) and call.excinfo:
+            tb: rich.console.RenderableType
+            if isinstance(report.longrepr, ExceptionChainRepr):
+                tb = ModernExceptionChainRepr(
+                    report.nodeid,
+                    report.longrepr,
+                    no_syntax=self.no_syntax,
+                    extra_lines=0,
+                )
+            else:
+                tb = ModernExceptionInfoRepr(report.nodeid, call.excinfo, extra_lines=1)
+
+            self.collect_errors[report.nodeid] = tb
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         status = None
