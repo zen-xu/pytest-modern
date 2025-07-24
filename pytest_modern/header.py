@@ -42,11 +42,14 @@ def _generate_root_col(session: Session) -> Columns:
 
 
 def _generate_inifile_col(session: Session) -> Columns:
-    return Columns(
-        [
-            f"configfile [magenta][bold]{Path(session.config.inifile).relative_to(session.config.rootpath)}"  # type: ignore
-        ]
-    )
+    if session.config.inifile:
+        return Columns(
+            [
+                f"configfile [magenta][bold]{Path(session.config.inifile).relative_to(session.config.rootpath)}"  # type: ignore
+            ]
+        )
+    else:
+        return Columns([])
 
 
 def _generate_plugins_col(session: Session) -> Columns:
