@@ -37,6 +37,11 @@ def test_xfail_strict():
     assert a + b == 3
 
 
+@pytest.mark.xfail
+def test_xpass():
+    pass
+
+
 def test_warning():
     warnings.warn("this is a warning", UserWarning, stacklevel=1)
 
