@@ -232,11 +232,16 @@ class ModernTerminalReporter:
         status = None
         self.test_reports[report.nodeid] = report
 
+        stage = ""
+
         if report.when == "setup":
             if report.outcome == "skipped":
                 self.categorized_reports["skipped"].append(report)
                 status = "skipped"
-            else:
+            elif report.outcome == "failed":
+                status = "failed"
+                stage = "setup"
+            elif report.outcome == "passed":
                 status = "running"
         elif report.when == "call":
             status, *_ = self.config.hook.pytest_report_teststatus(
@@ -250,7 +255,12 @@ class ModernTerminalReporter:
             self.categorized_reports[status].append(report)
             self.total_duration += report.duration
         elif report.when == "teardown":
-            return
+            if report.outcome == "failed":
+                stage = "teardown"
+                status = "failed"
+                self.categorized_reports[status].append(report)
+            else:
+                return
 
         assert status
         self.status_per_item[report.nodeid] = status
@@ -287,6 +297,8 @@ class ModernTerminalReporter:
             and getattr(item, "execution_count", 0) >= get_reruns_count(item)
         ):
             status_param["status"] = f"TRY {get_reruns_count(item)} FAIL"
+        if stage and status == "failed":
+            status_param["reason"] = f"{stage} error"
         self.test_live.update(new_test_status(item, **status_param))
         self.test_live.refresh()
 
