@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 import rich.console
 import rich.live
+import rich.markup
 import rich.padding
 import rich.panel
 import rich.rule
@@ -135,7 +136,7 @@ class ModernTerminalReporter:
         self.total_items_collected += len(items)
 
         self.collect_live.update(
-            f"[green bold]Collecting[/] [magenta]{report.nodeid}[/magenta] ([bold]{self.total_items_collected}[/] total item{plurals(self.total_items_collected)})",
+            f"[green bold]Collecting[/] [magenta]{rich.markup.escape(report.nodeid)}[/magenta] ([bold]{self.total_items_collected}[/] total item{plurals(self.total_items_collected)})",
         )
         self.collect_live.refresh()
 
@@ -190,7 +191,9 @@ class ModernTerminalReporter:
             for child in tree.children:
                 self.console.print(child)
         for nodeid, collect_error in self.collect_errors.items():
-            self.console.print(f"[red bold]COLLECT ERROR >> {nodeid}[/]")
+            self.console.print(
+                f"[red bold]COLLECT ERROR >> {rich.markup.escape(nodeid)}[/]"
+            )
             self.console.print(collect_error)
 
     def pytest_runtest_logstart(
@@ -397,7 +400,7 @@ class ModernTerminalReporter:
                     duration = format_node_duration(failed_report.duration)
                     yield rich.text.Text.assemble(
                         rich.text.Text.from_markup(
-                            f"[red bold]{'FAIL':>10s}[/] [{duration:>10s}] [red bold]{failed_report.nodeid}[/]"
+                            f"[red bold]{'FAIL':>10s}[/] [{duration:>10s}] [red bold]{rich.markup.escape(failed_report.nodeid)}[/]"
                         ),
                         " ",
                         crash_message,
@@ -406,7 +409,7 @@ class ModernTerminalReporter:
                     item = self.items[failed_report.nodeid]
                     timeout = pad_duration(get_timeout(item), ">")
                     yield (
-                        f"[red bold]{'TIMEOUT':>10s}[/] [{timeout}] [red bold]{failed_report.nodeid}[/]"
+                        f"[red bold]{'TIMEOUT':>10s}[/] [{timeout}] [red bold]{rich.markup.escape(failed_report.nodeid)}[/]"
                     )
 
         for warning_report in self.categorized_reports.get("warning", []):
@@ -423,7 +426,7 @@ class ModernTerminalReporter:
             warn_message.rstrip()
             yield rich.text.Text.assemble(
                 rich.text.Text.from_markup(
-                    f"[yellow bold]{'WARN':>10s}[/] [{duration}] [yellow bold]{warning_report.nodeid}[/]"
+                    f"[yellow bold]{'WARN':>10s}[/] [{duration}] [yellow bold]{rich.markup.escape(warning_report.nodeid)}[/]"
                 ),
                 " ",
                 warn_message,
