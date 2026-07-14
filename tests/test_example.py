@@ -84,3 +84,10 @@ class TestGroup:
 @pytest.mark.parametrize("store", ["default_db", "redis_celery"])
 def test_parametrized_id(store):
     raise RuntimeError(f"boom: {store}")
+
+
+def test_exception_group():
+    raise ExceptionGroup(
+        "multiple failures",
+        [ValueError("first"), ChoiceError("second")],
+    )
