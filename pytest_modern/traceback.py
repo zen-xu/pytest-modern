@@ -20,6 +20,7 @@ import rich.padding
 from _pytest._code.code import ExceptionChainRepr
 from _pytest._code.code import ExceptionInfo
 from _pytest._code.code import ReprEntry
+from _pytest._code.code import ReprEntryNative
 from pygments.token import Comment
 from pygments.token import Keyword
 from pygments.token import Name
@@ -196,6 +197,12 @@ class ModernExceptionChainRepr(ModernErrorRepr[ExceptionChainRepr]):
         theme = self.get_theme()
 
         for _, entry in loop_last(chain.reprtraceback.reprentries):
+            if isinstance(entry, ReprEntryNative):
+                # Native-style entries (ExceptionGroup sub-tracebacks, `--tb=native`)
+                # carry no source location, only pre-rendered lines. There is nothing
+                # to syntax-highlight, so emit the raw text verbatim.
+                yield repr_highlighter(Text("".join(entry.lines)))
+                continue
             assert isinstance(entry, ReprEntry)
 
             assert entry.reprfileloc is not None
