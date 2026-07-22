@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import time
 
 from collections import defaultdict
 from contextlib import suppress
@@ -102,6 +103,13 @@ class ModernTerminalReporter:
         self.categorized_reports: CategorizedReports = defaultdict(list)  # type: ignore
         self.total_duration: float = 0
 
+        # Progress / ETA status bar state
+        self.is_tty = sys.stdout.isatty()
+        self.total_selected = 0
+        self.completed_nodeids: set[NodeId] = set()
+        self._run_start: float | None = None
+        self._current_test_line: rich.console.RenderableType = rich.text.Text("")
+
         # _tw is used by pytest.Config.get_terminal_writer
         # We need to set it to a terminal writer that does nothing
         devnull_path = "nul" if os.name == "nt" else "/dev/null"
@@ -148,6 +156,7 @@ class ModernTerminalReporter:
         self.collect_stats["selected"] = [
             item for item in self.items.values() if item not in unselected
         ]
+        self.total_selected = len(self.collect_stats["selected"])
 
         line = f"[green bold]Collected[/] [bold]{self.total_items_collected}[/] item{plurals(self.total_items_collected)}"
         extra_line = ""
@@ -199,6 +208,9 @@ class ModernTerminalReporter:
     def pytest_runtest_logstart(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
     ) -> None:
+        if self._run_start is None:
+            self._run_start = time.monotonic()
+        self._current_test_line = rich.text.Text("")
         self.test_live = new_live(console=self.console)
         self.test_live.start()
 
@@ -302,11 +314,16 @@ class ModernTerminalReporter:
             status_param["status"] = f"TRY {get_reruns_count(item)} FAIL"
         if stage and status == "failed":
             status_param["reason"] = f"{stage} error"
-        self.test_live.update(new_test_status(item, **status_param))
+
+        if status in TERMINAL_STATUSES:
+            self.completed_nodeids.add(report.nodeid)
+
+        self._current_test_line = new_test_status(item, **status_param)
+        self._update_live()
         self.test_live.refresh()
 
         if status in ["failed", "timeout"]:
-            self.test_live.stop()
+            self._finish_live()
             self.console.print("[red bold]stdout ───[/]")
 
             if report.capstdout:
@@ -334,7 +351,75 @@ class ModernTerminalReporter:
     def pytest_runtest_logfinish(
         self, nodeid: NodeId, location: tuple[str, int | None, str]
     ) -> None:
+        self._finish_live()
+
+    def _update_live(self) -> None:
+        """Render the current test line together with the progress bar.
+
+        On a TTY the bar is kept at the bottom (below the test line) as a
+        persistent live region. On a non-TTY (e.g. Jenkins) the bar is rendered
+        above the test line, so the progress is printed right before each
+        PASS/FAIL/... status line.
+        """
+        bar = self._status_bar()
+        if bar is None:
+            self.test_live.update(self._current_test_line)
+        elif self.is_tty:
+            self.test_live.update(
+                rich.console.Group(self._current_test_line, bar)
+            )
+        else:
+            self.test_live.update(
+                rich.console.Group(bar, self._current_test_line)
+            )
+
+    def _finish_live(self) -> None:
+        """Persist the finished test line and stop the live region.
+
+        On a TTY the transient bottom bar is stripped so only the test line is
+        left in the scrollback. On a non-TTY the bar+line block is what gets
+        printed once, so it is kept as-is.
+        """
+        if not hasattr(self, "test_live"):
+            return
+        if self.is_tty:
+            self.test_live.update(self._current_test_line)
         self.test_live.stop()
+
+    def _status_bar(self) -> rich.text.Text | None:
+        total = self.total_selected
+        if not total:
+            return None
+        done = min(len(self.completed_nodeids), total)
+        elapsed = time.monotonic() - self._run_start if self._run_start else 0.0
+
+        if 0 < done < total and elapsed > 0:
+            eta_text = format_eta(elapsed / done * (total - done))
+        elif done >= total:
+            eta_text = "00:00"
+        else:
+            eta_text = "--:--"
+
+        width = 24
+        filled = min(round(done / total * width), width)
+        failures = len(self.categorized_reports.get("failed", [])) + len(
+            self.categorized_reports.get("timeout", [])
+        )
+        bar_color = "red" if failures else "green"
+        bar = (
+            f"[{bar_color}]{'━' * filled}[/][bright_black]{'━' * (width - filled)}[/]"
+        )
+        pct = round(done / total * 100)
+
+        parts = [
+            f"  {bar}  [bold cyan]{done}[/]/[bold cyan]{total}[/]",
+            f"[bold]{pct}%[/]",
+            f"elapsed {format_eta(elapsed)}",
+            f"ETA [bold]{eta_text}[/]",
+        ]
+        if failures:
+            parts.append(f"[bold red]{failures} failed[/]")
+        return rich.text.Text.from_markup("  ·  ".join(parts))
 
     def pytest_sessionfinish(
         self, session: pytest.Session, exitstatus: int | pytest.ExitCode
@@ -453,6 +538,21 @@ class ModernTerminalReporter:
     @property
     def no_syntax(self) -> bool:
         return self.config.getoption("code_highlight") == "no"  # type: ignore
+
+
+TERMINAL_STATUSES = frozenset(
+    {"passed", "failed", "skipped", "xfailed", "xpassed", "timeout"}
+)
+
+
+def format_eta(seconds: float) -> str:
+    """Format a duration as MM:SS (or H:MM:SS beyond an hour) for the status bar."""
+    total = int(seconds)
+    minutes, secs = divmod(total, 60)
+    if minutes >= 60:
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
 def plurals(items: Collection | int) -> str:
