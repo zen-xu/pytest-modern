@@ -79,3 +79,8 @@ class TestGroup:
     def test_fail(self):
         a = 1
         assert a == 2
+
+
+@pytest.mark.parametrize("store", ["default_db", "redis_celery"])
+def test_parametrized_id(store):
+    raise RuntimeError(f"boom: {store}")
