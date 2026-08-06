@@ -10,3 +10,14 @@ This plugin incorporates ideas from the implementation of [pytest-rich](https://
 
 With the plugin currently outputs this:
 <a href="https://asciinema.org/a/728361" target="_blank"><img src="https://asciinema.org/a/728361.svg" /></a>
+
+## Output width
+
+On a terminal the output is sized to fit it. When there is no terminal to
+measure — CI logs, pipes, `tee` — the width is read from `COLUMNS`, or from
+`PYTEST_MODERN_WIDTH` to set it without affecting other tools, falling back to
+200 columns when neither is set.
+
+```bash
+COLUMNS=140 pytest
+```
