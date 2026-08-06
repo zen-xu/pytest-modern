@@ -85,7 +85,7 @@ class ModernTerminalReporter:
         self.console = console or rich.console.Console(
             highlight=False,
             force_terminal=True,
-            width=None if sys.stdout.isatty() else 200,
+            width=console_width(),
             color_system="auto" if not self.no_color else None,
         )
         self.console.file = trim_io_space(self.console.file)
@@ -113,7 +113,9 @@ class ModernTerminalReporter:
             title = rich.rule.Rule(title_msg, style="default")
         else:
             title = rich.panel.Panel(
-                generate_header_group(session), title=title_msg, width=120
+                generate_header_group(session),
+                title=title_msg,
+                width=min(120, self.console.width),
             )
         self.console.print(title)
 
@@ -275,7 +277,9 @@ class ModernTerminalReporter:
                 "xpassed": lambda: "XPASS",
                 "skipped": lambda: "SKIP",
                 "timeout": lambda: "TIMEOUT",
-                "rerun": lambda: f"RETRY {getattr(item, 'execution_count', 1)}/{get_reruns_count(item)}",
+                "rerun": lambda: (
+                    f"RETRY {getattr(item, 'execution_count', 1)}/{get_reruns_count(item)}"
+                ),
             }.get(status, status.upper)(),
             "color": {
                 "running": "green",
@@ -541,6 +545,31 @@ class Live(rich.live.Live):
 
 
 code_cache = CodeCache()
+
+DEFAULT_NON_TTY_WIDTH = 200
+
+
+def console_width() -> int | None:
+    """Width for the reporter console, or None to let rich measure the terminal.
+
+    On a tty rich sizes itself. Without one there is nothing to measure, and
+    because the console is built with ``force_terminal=True`` rich skips its own
+    ``COLUMNS`` handling, so read the environment here before falling back to a
+    width wide enough to keep test ids and tracebacks unwrapped.
+    """
+    if sys.stdout.isatty():
+        return None
+
+    for var in ("COLUMNS", "PYTEST_MODERN_WIDTH"):
+        value = os.environ.get(var)
+        if value is None:
+            continue
+        with suppress(ValueError):
+            width = int(value)
+            if width > 0:
+                return width
+
+    return DEFAULT_NON_TTY_WIDTH
 
 
 def trim_io_space(f: IO[str]) -> IO[str]:
