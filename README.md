@@ -1,3 +1,5 @@
+
+
 # Modern Pytest
 
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -8,7 +10,7 @@
 
 This plugin incorporates ideas from the implementation of [pytest-rich](https://github.com/nicoddemus/pytest-rich) and takes inspiration from the output style of [nextest](https://nexte.st).
 
-With the plugin currently outputs this:
+With the plugin installed, it currently outputs this:
 <a href="https://asciinema.org/a/728361" target="_blank"><img src="https://asciinema.org/a/728361.svg" /></a>
 
 ## Output width
