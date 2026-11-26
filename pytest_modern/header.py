@@ -1,5 +1,6 @@
 import sys
 
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -43,11 +44,11 @@ def _generate_root_col(session: Session) -> Columns:
 
 def _generate_inifile_col(session: Session) -> Columns:
     if session.config.inifile:
-        return Columns(
-            [
-                f"configfile [magenta][bold]{Path(session.config.inifile).relative_to(session.config.rootpath)}"  # type: ignore
-            ]
-        )
+        inifile = Path(session.config.inifile)
+        # The config file may live outside the rootdir (e.g. -c, --rootdir).
+        with suppress(ValueError):
+            inifile = inifile.relative_to(session.config.rootpath)
+        return Columns([f"configfile [magenta][bold]{inifile}"])
     else:
         return Columns([])
 
