@@ -252,6 +252,10 @@ class ModernTerminalReporter:
             status, *_ = self.config.hook.pytest_report_teststatus(
                 report=report, config=self.config
             )
+            if not status:
+                # pytest asked for this report to be hidden (e.g. a passing
+                # subtest at verbosity 0); do not display or count it.
+                return
             if status == "failed":
                 with suppress(Exception):
                     crash_message: str = report.longrepr.reprcrash.message  # type: ignore
